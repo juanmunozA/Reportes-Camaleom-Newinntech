@@ -188,6 +188,8 @@ def run_status(job_id: str, request: Request):
         "state": job.get("state"),
         "last_lines": job.get("last_lines", []),
         "error": job.get("error"),
+        "attempt": job.get("attempt", 0),
+        "max_attempts": job.get("max_attempts", 1),
     }
 
 

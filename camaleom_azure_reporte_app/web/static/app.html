@@ -8,7 +8,7 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">Camaleom + Azure</div>
+  <div class="brand">◆ Camaleom + Azure</div>
   <div class="user-info">
     <span id="userEmail"></span>
     <button class="link" id="logoutBtn">Salir</button>
@@ -57,6 +57,7 @@
 
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
+  <div class="attempt-pill" id="attemptPill">Intento 1</div>
   <p id="loadingText">Cargando datos de Camaleom y Azure. Esto puede tardar unos minutos, no cierres esta pagina...</p>
   <div class="log-line" id="loadingLine"></div>
 </div>
@@ -155,6 +156,8 @@ function pollStatus() {
     const data = await resp.json();
     const lines = data.last_lines || [];
     document.getElementById("loadingLine").textContent = lines.length ? lines[lines.length - 1] : "";
+    document.getElementById("attemptPill").textContent = `Intento ${Math.max(data.attempt || 1, 1)} de ${data.max_attempts || 1}`;
+
     if (data.state === "ok") {
       document.getElementById("loadingOverlay").classList.remove("show");
       document.getElementById("resultCard").style.display = "block";
@@ -163,8 +166,12 @@ function pollStatus() {
       document.getElementById("reportFrame").src = `/api/run/${currentJob}/report`;
     } else if (data.state === "failed") {
       document.getElementById("loadingOverlay").classList.remove("show");
-      showError(data.error || "El reporte fallo.");
+      showError((data.error || "El reporte fallo.") + ` (despues de ${data.max_attempts || 1} intentos)`);
+    } else if (data.state === "retrying") {
+      document.getElementById("loadingText").textContent = "Un intento fallo, reintentando automaticamente...";
+      pollStatus();
     } else {
+      document.getElementById("loadingText").textContent = "Cargando datos de Camaleom y Azure. Esto puede tardar unos minutos, no cierres esta pagina...";
       pollStatus();
     }
   }, 2000);

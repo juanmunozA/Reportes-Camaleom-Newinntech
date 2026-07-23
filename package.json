@@ -1,0 +1,12 @@
+﻿{
+  "name": "camaleom-new-inntech",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automatizacion Camaleom + Azure DevOps para reporte y cruce de horas.",
+  "scripts": {
+    "start": "powershell -ExecutionPolicy Bypass -File ./start.ps1",
+    "loop": "powershell -ExecutionPolicy Bypass -File ./start.ps1 -Loop",
+    "report": "powershell -ExecutionPolicy Bypass -File ./report.ps1",
+    "azure": "powershell -ExecutionPolicy Bypass -File ./start.ps1 -SoloAzure"
+  }
+}

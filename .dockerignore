@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.git/
+.env
+.env.*
+node_modules/
+
+descargas_reportes/
+salidas_reportes/
+agent_logs/
+
+*.xlsx
+*.xls
+*.crdownload

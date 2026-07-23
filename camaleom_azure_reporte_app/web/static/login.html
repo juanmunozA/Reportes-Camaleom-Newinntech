@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reportes Camaleom + Azure</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="center-screen">
+  <div class="card">
+    <h1 id="title">Bienvenido de vuelta</h1>
+    <p class="sub" id="subtitle">Ingresa tus credenciales para continuar con tu analisis de horas.</p>
+    <form id="form">
+      <label>Email</label>
+      <input type="email" id="email" required>
+      <label>Contrasena</label>
+      <input type="password" id="password" required minlength="6">
+      <button type="submit" class="primary" id="submitBtn">Ingresar</button>
+    </form>
+    <div class="error-msg" id="errorMsg"></div>
+    <button class="link" id="toggleMode">No tengo cuenta, crear una</button>
+  </div>
+</div>
+<script>
+let mode = "login";
+const title = document.getElementById("title");
+const subtitle = document.getElementById("subtitle");
+const submitBtn = document.getElementById("submitBtn");
+const toggleMode = document.getElementById("toggleMode");
+const errorMsg = document.getElementById("errorMsg");
+
+toggleMode.addEventListener("click", () => {
+  mode = mode === "login" ? "register" : "login";
+  if (mode === "register") {
+    title.textContent = "Crear cuenta";
+    subtitle.textContent = "Registrate para guardar tu perfil de Camaleom y Azure.";
+    submitBtn.textContent = "Crear cuenta";
+    toggleMode.textContent = "Ya tengo cuenta, ingresar";
+  } else {
+    title.textContent = "Bienvenido de vuelta";
+    subtitle.textContent = "Ingresa tus credenciales para continuar con tu analisis de horas.";
+    submitBtn.textContent = "Ingresar";
+    toggleMode.textContent = "No tengo cuenta, crear una";
+  }
+  errorMsg.classList.remove("show");
+});
+
+document.getElementById("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  errorMsg.classList.remove("show");
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  const endpoint = mode === "login" ? "/api/login" : "/api/register";
+  try {
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(data.detail || "Error de autenticacion");
+    }
+    window.location.href = "/";
+  } catch (err) {
+    errorMsg.textContent = err.message;
+    errorMsg.classList.add("show");
+  }
+});
+</script>
+</body>
+</html>

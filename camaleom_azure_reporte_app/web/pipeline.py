@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import io
+import os
 import re
+import subprocess
+import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -10,10 +13,46 @@ import pandas as pd
 
 from ..azure_devops import AzureDevOpsClient
 from ..camaleom_excel import construir_resumen_camaleom, leer_reporte_camaleom
-from ..config import AZURE_DEVOPS_PAT
+from ..config import AZURE_DEVOPS_PAT, CAMALEOM_URL
 from ..matcher import cruzar_azure_camaleom, es_task_azure
 
 HORAS_DIA = 8.0
+
+
+def descargar_camaleom_subproceso(user: str, password: str, fecha_inicio: date, fecha_fin: date, log=lambda m: None) -> str:
+    """Lanza la descarga de Camaleom en un subproceso aislado. Devuelve la ruta del Excel."""
+    if not user or not password:
+        raise RuntimeError("Para el modo Camaleom automatico necesitas guardar tu usuario y contrasena de Camaleom en Perfil.")
+    env = os.environ.copy()
+    env.update({
+        "CAM_USER": user, "CAM_PASS": password, "CAM_URL": CAMALEOM_URL,
+        "CAM_FI": fecha_inicio.isoformat(), "CAM_FF": fecha_fin.isoformat(),
+        "HEADLESS": "true", "PYTHONUNBUFFERED": "1",
+    })
+    log("Abriendo Camaleom en el servidor (esto puede tardar)...")
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "camaleom_azure_reporte_app.web.camaleom_download"],
+            env=env, capture_output=True, text=True, timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Camaleom tardo demasiado (posible MFA/Authenticator pendiente). Usa el modo Archivo XLSX.")
+
+    salida = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    for linea in (proc.stdout or "").splitlines():
+        if linea.strip() and "PATHRESULT::" not in linea:
+            log(linea.strip()[:160])
+
+    for linea in salida.splitlines():
+        if linea.startswith("LOGINFAIL::"):
+            raise RuntimeError(linea.split("LOGINFAIL::", 1)[1].strip())
+        if linea.startswith("PATHRESULT::"):
+            ruta = linea.split("PATHRESULT::", 1)[1].strip()
+            if ruta and Path(ruta).exists():
+                return ruta
+
+    cola = "\n".join(salida.strip().splitlines()[-4:])
+    raise RuntimeError(f"No pude descargar el reporte de Camaleom automaticamente. Detalle: {cola or 'sin salida'}")
 
 
 def _num(v: Any) -> float:
@@ -150,7 +189,6 @@ def _build_xlsx(azure_df, comparativo, resumen_dia, total_por_descripcion) -> by
 
 
 def ejecutar(
-    excel_path: str,
     fecha_final: date,
     dias_atras: int,
     sprints_txt: str,
@@ -158,6 +196,10 @@ def ejecutar(
     azure_org: str,
     azure_project: str,
     azure_team: str,
+    source: str = "xlsx",
+    excel_path: str | None = None,
+    camaleom_user: str = "",
+    camaleom_pass: str = "",
     log=lambda m: None,
 ) -> dict[str, Any]:
     if not AZURE_DEVOPS_PAT:
@@ -176,7 +218,14 @@ def ejecutar(
     if not sprints:
         raise RuntimeError("No encontre sprints en ese rango de fechas. Indica el/los sprint(s) manualmente.")
 
-    # Camaleom
+    # Camaleom: por archivo subido o intento automatico por navegador
+    if source == "camaleom":
+        log("Modo Camaleom automatico: intentando iniciar sesion...")
+        excel_path = descargar_camaleom_subproceso(camaleom_user, camaleom_pass, fecha_inicio, fecha_final, log=log)
+        log("Excel de Camaleom descargado automaticamente.")
+    if not excel_path:
+        raise RuntimeError("No hay Excel de Camaleom (sube el archivo o usa el modo automatico).")
+
     log("Leyendo Excel de Camaleom...")
     datos_camaleom, meta = leer_reporte_camaleom(Path(excel_path), fecha_inicio, fecha_final)
     resumen_dia, detalle, total_por_descripcion = construir_resumen_camaleom(

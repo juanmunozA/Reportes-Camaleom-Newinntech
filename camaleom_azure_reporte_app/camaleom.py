@@ -11,17 +11,20 @@ from selenium.webdriver.common.keys import Keys
 from .config import *
 from .selenium_utils import *
 
-def login_camaleom(driver: webdriver.Chrome):
-    if not CAMALEOM_USER or not CAMALEOM_PASS:
-        raise RuntimeError("Faltan variables de entorno CAMALEOM_USER y/o CAMALEOM_PASS")
+def login_camaleom(driver: webdriver.Chrome, user: str | None = None, password: str | None = None, url: str | None = None):
+    user = user or CAMALEOM_USER
+    password = password or CAMALEOM_PASS
+    url = url or CAMALEOM_URL
+    if not user or not password:
+        raise RuntimeError("Faltan credenciales de Camaleom (usuario/contrasena).")
 
-    driver.get(CAMALEOM_URL)
+    driver.get(url)
     time.sleep(0.8)
 
     # Si Camaleom redirige a Microsoft, esto tambiÃ©n funciona con los ids i0116/i0118.
     try:
         usuario = elemento_visible_por_css(driver, SELECTORES_CAMALEOM["usuario"], segundos=0.8)
-        escribir_texto_login(driver, usuario, CAMALEOM_USER)
+        escribir_texto_login(driver, usuario, user)
         if not click_boton_login(driver, TEXTOS_CAMALEOM["siguiente"], segundos=1.2):
             click_css_si_existe(driver, SELECTORES_CAMALEOM["submit"], segundos=0.8)
         usuario.send_keys(Keys.ENTER)
@@ -30,14 +33,14 @@ def login_camaleom(driver: webdriver.Chrome):
         return
 
     try:
-        password = elemento_password_login(driver, segundos=8)
-        escribir_texto_login(driver, password, CAMALEOM_PASS, es_password=True)
+        password_el = elemento_password_login(driver, segundos=8)
+        escribir_texto_login(driver, password_el, password, es_password=True)
         time.sleep(0.4)
         try:
-            valor_password = password.get_attribute("value") or ""
+            valor_password = password_el.get_attribute("value") or ""
         except StaleElementReferenceException:
-            valor_password = CAMALEOM_PASS
-        if len(valor_password) < len(CAMALEOM_PASS):
+            valor_password = password
+        if len(valor_password) < len(password):
             print("No pude escribir la contraseña automáticamente. Escríbela en el navegador y pulsa Siguiente. Continúo apenas detecte el home...")
             esperar_salida_login(driver, segundos=120)
             return
@@ -45,7 +48,7 @@ def login_camaleom(driver: webdriver.Chrome):
             click_boton_login(driver, TEXTOS_CAMALEOM["siguiente"], segundos=0.8)
         if not esperar_salida_login(driver, segundos=4):
             try:
-                password.send_keys(Keys.ENTER)
+                password_el.send_keys(Keys.ENTER)
             except StaleElementReferenceException:
                 driver.switch_to.active_element.send_keys(Keys.ENTER)
             esperar_salida_login(driver, segundos=120)

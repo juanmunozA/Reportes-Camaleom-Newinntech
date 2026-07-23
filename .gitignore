@@ -3,6 +3,8 @@ __pycache__/
 .env
 .env.*
 node_modules/
+.venv/
+.venv_test/
 
 descargas_reportes/
 salidas_reportes/

@@ -9,14 +9,14 @@
 <body>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="logo"><span class="sq">◆</span> Reporte de Horas</div>
-    <div class="nav-item active" data-view="inicio"><span class="ic">🏠</span> Inicio</div>
-    <div class="nav-item" data-view="nueva"><span class="ic">✨</span> Nueva ejecución</div>
-    <div class="nav-item" data-view="ejecuciones"><span class="ic">🗂️</span> Mis ejecuciones</div>
-    <div class="nav-item" data-view="perfil"><span class="ic">👤</span> Perfil</div>
+    <div class="logo"><span class="sq" data-ic="logo"></span> Reporte de Horas</div>
+    <div class="nav-item active" data-view="inicio"><span class="ic" data-ic="home"></span> Inicio</div>
+    <div class="nav-item" data-view="nueva"><span class="ic" data-ic="plus"></span> Nueva ejecución</div>
+    <div class="nav-item" data-view="ejecuciones"><span class="ic" data-ic="list"></span> Mis ejecuciones</div>
+    <div class="nav-item" data-view="perfil"><span class="ic" data-ic="user"></span> Perfil</div>
     <div class="nav-spacer"></div>
     <div class="nav-sep"></div>
-    <div class="nav-item" id="logoutBtn"><span class="ic">⎋</span> Cerrar sesión</div>
+    <div class="nav-item" id="logoutBtn"><span class="ic" data-ic="logout"></span> Cerrar sesión</div>
   </aside>
 
   <main class="content">
@@ -24,17 +24,17 @@
 
     <!-- INICIO -->
     <section class="view active" id="view-inicio">
-      <div class="page-head"><h1>👋 Hola, <span id="helloName"></span></h1><p>Resumen de tu actividad y accesos rápidos.</p></div>
+      <div class="page-head"><h1><span class="accent-bar"></span>Hola, <span id="helloName"></span></h1><p>Resumen de tu actividad y accesos rápidos.</p></div>
       <div class="kpi-grid">
-        <div class="kpi cyan"><div class="k-label">Ejecuciones hoy</div><div class="k-value" id="kRunsToday">0 / 8</div></div>
+        <div class="kpi cyan"><div class="k-label">Ejecuciones hoy</div><div class="k-value" id="kRunsToday">0</div></div>
         <div class="kpi purple"><div class="k-label">Total ejecuciones</div><div class="k-value" id="kRunsTotal">0</div></div>
-        <div class="kpi ok"><div class="k-label">Gemini IA</div><div class="k-value" id="kGemini" style="font-size:18px">—</div></div>
+        <div class="kpi ok"><div class="k-label">Asistente IA</div><div class="k-value" id="kGemini" style="font-size:18px">—</div></div>
       </div>
       <div class="section-card">
         <h2>Empieza un análisis</h2>
-        <p class="hint">Sube tu Excel de Camaleom y cruza tus horas contra Azure DevOps por sprint.</p>
-        <button class="btn grad" data-goto="nueva">✨ Nueva ejecución</button>
-        <button class="btn" data-goto="ejecuciones">🗂️ Ver mis ejecuciones</button>
+        <p class="hint">Cruza tus horas de Camaleom contra Azure DevOps por sprint.</p>
+        <button class="btn grad" data-goto="nueva">Nueva ejecución</button>
+        <button class="btn" data-goto="ejecuciones">Ver mis ejecuciones</button>
       </div>
       <div class="section-card">
         <h2>Última ejecución</h2>
@@ -44,24 +44,34 @@
 
     <!-- NUEVA EJECUCION -->
     <section class="view" id="view-nueva">
-      <div class="page-head"><h1>✨ Nueva ejecución</h1><p>Configura el período y las fuentes que se usarán para generar el análisis.</p></div>
+      <div class="page-head"><h1><span class="accent-bar"></span>Nueva ejecución</h1><p>Configura el período y las fuentes que se usarán para generar el análisis.</p></div>
 
       <div class="section-card">
         <h2>Resumen de configuración</h2>
         <div class="grid-3" style="margin-top:12px">
-          <div class="kpi cyan"><div class="k-label">Diferenciador Azure</div><div class="k-value" id="cfgDiff" style="font-size:18px">—</div></div>
-          <div class="kpi purple"><div class="k-label">Gemini</div><div class="k-value" id="cfgGemini" style="font-size:18px">—</div></div>
-          <div class="kpi ok"><div class="k-label">Ejecuciones hoy</div><div class="k-value" id="cfgRuns" style="font-size:18px">0 / 8</div></div>
+          <div class="kpi purple"><div class="k-label">Usuario Camaleom</div><div class="k-value" id="cfgCam" style="font-size:16px">No recordado</div></div>
+          <div class="kpi cyan"><div class="k-label">Diferenciador Azure</div><div class="k-value" id="cfgDiff" style="font-size:16px">—</div></div>
+          <div class="kpi ok"><div class="k-label">Ejecuciones hoy</div><div class="k-value" id="cfgRuns" style="font-size:16px">0</div></div>
         </div>
       </div>
 
       <div class="grid-3">
         <div class="section-card">
           <h2>1. Origen de los datos</h2>
-          <p class="hint">Sube el Excel exportado por Camaleom (Reportes › Mis Actividades › Exportar).</p>
-          <div class="file-drop" id="fileDrop">
-            <input type="file" id="camaleomExcel" accept=".xlsx,.xls" hidden>
-            <span id="fileLabel">Clic para seleccionar el Excel de Camaleom</span>
+          <div class="radio-row">
+            <div class="radio-chip" data-src="camaleom">Camaleom (automático)</div>
+            <div class="radio-chip active" data-src="xlsx">Archivo XLSX</div>
+          </div>
+          <div id="xlsxBlock">
+            <p class="hint">Sube el Excel exportado por Camaleom (Reportes › Mis Actividades › Exportar).</p>
+            <div class="file-drop" id="fileDrop">
+              <input type="file" id="camaleomExcel" accept=".xlsx,.xls" hidden>
+              <span id="fileLabel">Clic para seleccionar el Excel de Camaleom</span>
+            </div>
+          </div>
+          <div id="camBlock" style="display:none">
+            <p class="hint">Intentará iniciar sesión en Camaleom con las credenciales guardadas en tu Perfil. Si tu cuenta pide MFA, no se podrá en el servidor; usa Archivo XLSX.</p>
+            <div class="note" id="camCredNote"></div>
           </div>
           <label>Diferenciador Azure DevOps</label>
           <input id="diferenciador" placeholder="ej: muñoz">
@@ -86,32 +96,40 @@
       </div>
 
       <div class="section-card">
-        <button class="primary" id="runBtn" style="max-width:280px">▶ Ejecutar análisis</button>
+        <button class="primary" id="runBtn" style="max-width:280px">Ejecutar análisis</button>
         <div class="error-msg" id="errorMsg"></div>
       </div>
     </section>
 
     <!-- MIS EJECUCIONES -->
     <section class="view" id="view-ejecuciones">
-      <div class="page-head"><h1>🗂️ Mis ejecuciones</h1><p>Historial de análisis generados. Haz clic para abrir el reporte.</p></div>
+      <div class="page-head"><h1><span class="accent-bar"></span>Mis ejecuciones</h1><p>Historial de análisis generados. Haz clic para abrir el reporte.</p></div>
       <div id="runsList"><p class="hint">Cargando…</p></div>
     </section>
 
     <!-- PERFIL -->
     <section class="view" id="view-perfil">
-      <div class="page-head"><h1>👤 Perfil</h1><p>Configuración de Azure que se reutiliza en cada ejecución.</p></div>
+      <div class="page-head"><h1><span class="accent-bar"></span>Perfil</h1><p>Configuración reutilizable en cada ejecución.</p></div>
       <div class="section-card">
-        <h2>Datos</h2>
+        <h2>Azure</h2>
         <div style="margin:10px 0"><label>Email</label><input id="pEmail" disabled></div>
         <div class="grid-2">
-          <div><label>Organización Azure</label><input id="azureOrg"></div>
-          <div><label>Proyecto Azure</label><input id="azureProject"></div>
-          <div><label>Equipo Azure</label><input id="azureTeam"></div>
+          <div><label>Organización</label><input id="azureOrg"></div>
+          <div><label>Proyecto</label><input id="azureProject"></div>
+          <div><label>Equipo</label><input id="azureTeam"></div>
           <div><label>Diferenciador (nombre/apellido)</label><input id="azureFullName"></div>
         </div>
-        <button class="btn grad" id="saveProfileBtn" style="margin-top:16px">Guardar perfil</button>
-        <span id="profileSaved" style="color:var(--ok); font-size:13px; margin-left:12px; display:none">✓ Guardado</span>
       </div>
+      <div class="section-card">
+        <h2>Camaleom <span class="tag-opt">para modo automático</span></h2>
+        <p class="hint">Se guarda cifrado. Solo se usa si eliges el origen “Camaleom (automático)”.</p>
+        <div class="grid-2">
+          <div><label>Usuario Camaleom</label><input id="camUser" placeholder="usuario"></div>
+          <div><label>Contraseña Camaleom</label><input type="password" id="camPass" placeholder="dejar en blanco para no cambiar"></div>
+        </div>
+      </div>
+      <button class="btn grad" id="saveProfileBtn">Guardar perfil</button>
+      <span id="profileSaved" class="saved-ok">Guardado</span>
     </section>
   </main>
 </div>
@@ -119,12 +137,14 @@
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
   <div class="attempt-pill" id="attemptPill">Procesando…</div>
-  <p id="loadingText">Consultando Azure y cruzando con tu Excel de Camaleom. No cierres esta página…</p>
+  <p id="loadingText">Consultando Azure y cruzando con Camaleom. No cierres esta página…</p>
   <div class="log-line" id="loadingLine"></div>
 </div>
 
+<script src="/static/icons.js"></script>
 <script>
-let ME = null;
+let ME = null, SOURCE = "xlsx";
+renderIcons();
 
 function nav(view) {
   document.querySelectorAll(".nav-item[data-view]").forEach(n => n.classList.toggle("active", n.dataset.view === view));
@@ -138,45 +158,54 @@ document.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click"
 document.getElementById("menuBtn").addEventListener("click", () => document.getElementById("sidebar").classList.toggle("open"));
 document.getElementById("logoutBtn").addEventListener("click", async () => { await fetch("/api/logout", {method:"POST"}); location.href = "/"; });
 
+// source selector
+document.querySelectorAll(".radio-chip").forEach(c => c.addEventListener("click", () => {
+  document.querySelectorAll(".radio-chip").forEach(x => x.classList.remove("active"));
+  c.classList.add("active"); SOURCE = c.dataset.src;
+  document.getElementById("xlsxBlock").style.display = SOURCE === "xlsx" ? "block" : "none";
+  document.getElementById("camBlock").style.display = SOURCE === "camaleom" ? "block" : "none";
+}));
+
 async function loadMe() {
   const r = await fetch("/api/me");
   if (!r.ok) { location.href = "/"; return; }
   ME = await r.json();
   document.getElementById("helloName").textContent = ME.email.split("@")[0];
   document.getElementById("pEmail").value = ME.email;
-  const runsTxt = `${ME.runs_today} / ${ME.daily_limit}`;
-  document.getElementById("kRunsToday").textContent = runsTxt;
-  document.getElementById("cfgRuns").textContent = runsTxt;
+  document.getElementById("kRunsToday").textContent = ME.runs_today;
+  document.getElementById("cfgRuns").textContent = ME.runs_today;
   const gem = ME.gemini_enabled ? "Activo" : "No configurado";
   document.getElementById("kGemini").textContent = gem;
-  document.getElementById("cfgGemini").textContent = gem;
   const p = ME.profile;
   document.getElementById("azureOrg").value = p.azure_org || "";
   document.getElementById("azureProject").value = p.azure_project || "";
   document.getElementById("azureTeam").value = p.azure_team || "";
   document.getElementById("azureFullName").value = p.azure_full_name || "";
   document.getElementById("diferenciador").value = p.azure_full_name || "";
+  document.getElementById("camUser").value = p.camaleom_user || "";
   document.getElementById("cfgDiff").textContent = p.azure_full_name || "—";
+  document.getElementById("cfgCam").textContent = p.camaleom_user || "No recordado";
+  document.getElementById("camPass").placeholder = p.camaleom_pass_saved ? "guardada (dejar en blanco para no cambiar)" : "contraseña";
+  document.getElementById("camCredNote").textContent = p.camaleom_user
+    ? `Usará el usuario “${p.camaleom_user}”. ${p.camaleom_pass_saved ? "Contraseña guardada." : "⚠ Falta guardar la contraseña en Perfil."}`
+    : "⚠ No tienes credenciales de Camaleom guardadas. Ve a Perfil para agregarlas.";
   const today = new Date(); today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
   document.getElementById("fechaFinal").value = today.toISOString().slice(0,10);
   updatePeriodo();
 }
 
-// file
 const fileInput = document.getElementById("camaleomExcel");
 document.getElementById("fileDrop").addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", () => {
-  const d = document.getElementById("fileDrop");
-  document.getElementById("fileLabel").textContent = fileInput.files.length ? "📄 " + fileInput.files[0].name : "Clic para seleccionar el Excel de Camaleom";
-  d.classList.toggle("has-file", fileInput.files.length > 0);
+  document.getElementById("fileLabel").textContent = fileInput.files.length ? fileInput.files[0].name : "Clic para seleccionar el Excel de Camaleom";
+  document.getElementById("fileDrop").classList.toggle("has-file", fileInput.files.length > 0);
 });
 
 function updatePeriodo() {
   const ff = document.getElementById("fechaFinal").value;
   const dias = parseInt(document.getElementById("diasAtras").value || "0", 10);
   if (!ff) { document.getElementById("periodoPreview").textContent = "—"; return; }
-  const fin = new Date(ff + "T00:00:00");
-  const ini = new Date(fin); ini.setDate(ini.getDate() - dias);
+  const fin = new Date(ff + "T00:00:00"); const ini = new Date(fin); ini.setDate(ini.getDate() - dias);
   const fmt = d => d.toLocaleDateString("es-CO", {day:"2-digit", month:"2-digit", year:"numeric"});
   document.getElementById("periodoPreview").textContent = `${fmt(ini)} → ${fmt(fin)}`;
 }
@@ -190,8 +219,10 @@ document.getElementById("runBtn").addEventListener("click", async () => {
   document.getElementById("errorMsg").classList.remove("show");
   const ff = document.getElementById("fechaFinal").value;
   if (!ff) return showError("Indica la fecha final.");
-  if (!fileInput.files.length) return showError("Sube el Excel de Camaleom.");
+  if (SOURCE === "xlsx" && !fileInput.files.length) return showError("Sube el Excel de Camaleom o cambia al modo automático.");
+  if (SOURCE === "camaleom" && !document.getElementById("camUser").value) return showError("No tienes credenciales de Camaleom guardadas. Ve a Perfil.");
   const fd = new FormData();
+  fd.append("source", SOURCE);
   fd.append("fecha_final", ff);
   fd.append("dias_atras", document.getElementById("diasAtras").value || "21");
   fd.append("sprints", document.getElementById("sprints").value.trim());
@@ -199,11 +230,14 @@ document.getElementById("runBtn").addEventListener("click", async () => {
   fd.append("azure_org", document.getElementById("azureOrg").value);
   fd.append("azure_project", document.getElementById("azureProject").value);
   fd.append("azure_team", document.getElementById("azureTeam").value);
-  fd.append("camaleom_excel", fileInput.files[0]);
+  if (SOURCE === "xlsx") fd.append("camaleom_excel", fileInput.files[0]);
   try {
     const r = await fetch("/api/run", { method:"POST", body: fd });
     if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || "No pude iniciar."); }
     const { job_id } = await r.json();
+    document.getElementById("loadingText").textContent = SOURCE === "camaleom"
+      ? "Iniciando sesión en Camaleom y consultando Azure. Puede tardar…"
+      : "Consultando Azure y cruzando con Camaleom. No cierres esta página…";
     document.getElementById("loadingOverlay").classList.add("show");
     poll(job_id);
   } catch(e){ showError(e.message); }
@@ -217,7 +251,7 @@ function poll(jobId) {
     document.getElementById("loadingLine").textContent = lines.length ? lines[lines.length-1] : "";
     document.getElementById("attemptPill").textContent = d.state === "retrying" ? `Reintentando (${d.attempt}/${d.max_attempts})` : "Procesando…";
     if (d.state === "ok") { location.href = "/report?run=" + d.run_id; }
-    else if (d.state === "failed") { document.getElementById("loadingOverlay").classList.remove("show"); showError((d.error||"Falló")+` (tras ${d.max_attempts} intentos)`); }
+    else if (d.state === "failed") { document.getElementById("loadingOverlay").classList.remove("show"); showError(d.error || "Falló la ejecución."); }
     else poll(jobId);
   }, 2000);
 }
@@ -236,7 +270,7 @@ async function loadRuns() {
       <div class="r-main"><div class="r-title">Sprint ${run.sprints||"?"} · ${run.persona||"Todos"}</div>
       <div class="r-sub">${run.periodo_inicio} → ${run.periodo_fin} · ${fecha}</div></div>
       <div class="r-metric"><b>${m.tasks_reportadas??"-"}</b><span>reportadas</span></div>
-      <div class="r-metric"><b class="${(m.tasks_sin_reportar||0)>0?'':''}" style="color:${(m.tasks_sin_reportar||0)>0?'var(--bad)':'var(--ok)'}">${m.tasks_sin_reportar??"-"}</b><span>sin reportar</span></div>
+      <div class="r-metric"><b style="color:${(m.tasks_sin_reportar||0)>0?'var(--bad)':'var(--ok)'}">${m.tasks_sin_reportar??"-"}</b><span>sin reportar</span></div>
       <div class="r-metric"><b>${m.total_reportado??"-"}h</b><span>reportado</span></div>
     </div>`;
   }).join("");
@@ -251,17 +285,23 @@ function renderLast(run) {
     <div class="r-sub">${run.periodo_inicio} → ${run.periodo_fin}</div></div>
     <div class="r-metric"><b style="color:${(m.balance||0)<0?'var(--bad)':'var(--ok)'}">${m.balance??"-"}h</b><span>balance</span></div>
     <div class="r-metric"><b>${m.total_reportado??"-"}h</b><span>reportado</span></div>
-    <div class="btn grad">Abrir →</div></div>`;
+    <div class="btn grad">Abrir</div></div>`;
 }
 
 document.getElementById("saveProfileBtn").addEventListener("click", async () => {
-  await fetch("/api/profile", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+  const body = {
     azure_org: document.getElementById("azureOrg").value,
     azure_project: document.getElementById("azureProject").value,
     azure_team: document.getElementById("azureTeam").value,
     azure_full_name: document.getElementById("azureFullName").value,
-  })});
+    camaleom_user: document.getElementById("camUser").value,
+  };
+  const pass = document.getElementById("camPass").value;
+  if (pass) body.camaleom_pass = pass;
+  await fetch("/api/profile", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+  document.getElementById("camPass").value = "";
   const s = document.getElementById("profileSaved"); s.style.display="inline"; setTimeout(()=>s.style.display="none", 2000);
+  loadMe();
 });
 
 loadMe().then(loadRuns);

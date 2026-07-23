@@ -16,7 +16,6 @@ from ..config import (APP_SECRET_KEY, AZURE_DEVOPS_PAT, AZURE_ORG, AZURE_PROJECT
 from . import db, gemini, jobs
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-DAILY_LIMIT = 8
 
 app = FastAPI(title="Reportes Camaleom + Azure")
 
@@ -113,12 +112,13 @@ def me(request: Request):
         "email": user["email"],
         "gemini_enabled": bool(GEMINI_API_KEY),
         "runs_today": db.count_runs_today(user["id"]),
-        "daily_limit": DAILY_LIMIT,
         "profile": {
             "azure_org": profile.get("azure_org") or AZURE_ORG,
             "azure_project": profile.get("azure_project") or AZURE_PROJECT,
             "azure_team": profile.get("azure_team") or AZURE_TEAM,
             "azure_full_name": profile.get("azure_full_name") or "",
+            "camaleom_user": profile.get("camaleom_user") or "",
+            "camaleom_pass_saved": bool(profile.get("camaleom_pass_enc")),
         },
     }
 
@@ -127,14 +127,17 @@ def me(request: Request):
 async def save_profile(request: Request):
     user = require_user(request)
     body = await request.json()
+    existing = db.get_profile(user["id"]) or {}
+    # Solo actualiza la contrasena de Camaleom si mandan una nueva.
+    nueva_pass = body.get("camaleom_pass")
     db.save_profile(
         user["id"],
         body.get("azure_org") or AZURE_ORG,
         body.get("azure_project") or AZURE_PROJECT,
         body.get("azure_team") or AZURE_TEAM,
         body.get("azure_full_name") or "",
-        (db.get_profile(user["id"]) or {}).get("camaleom_user") or "",
-        None,
+        body.get("camaleom_user") if body.get("camaleom_user") is not None else (existing.get("camaleom_user") or ""),
+        nueva_pass if nueva_pass else None,
     )
     return {"ok": True}
 
@@ -163,7 +166,8 @@ def sprint_range(sprints: str, azure_org: str = "", azure_project: str = "", azu
 @app.post("/api/run")
 async def run_reporte(
     request: Request,
-    camaleom_excel: UploadFile = File(...),
+    camaleom_excel: UploadFile | None = File(None),
+    source: str = Form("xlsx"),
     fecha_final: str = Form(...),
     dias_atras: int = Form(21),
     sprints: str = Form(""),
@@ -173,28 +177,42 @@ async def run_reporte(
     azure_team: str = Form(""),
 ):
     user = require_user(request)
-
-    if db.count_runs_today(user["id"]) >= DAILY_LIMIT:
-        raise HTTPException(status_code=429, detail=f"Alcanzaste el limite de {DAILY_LIMIT} ejecuciones por dia.")
-
     fecha_final_d = _parse_date(fecha_final)
-
-    filename = camaleom_excel.filename or "camaleom.xlsx"
-    if not filename.lower().endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="El archivo de Camaleom debe ser un Excel (.xlsx o .xls).")
-
-    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    excel_path = DOWNLOAD_DIR / f"upload_{user['id']}_{uuid.uuid4().hex}{Path(filename).suffix or '.xlsx'}"
-    with excel_path.open("wb") as fh:
-        shutil.copyfileobj(camaleom_excel.file, fh)
+    profile = db.get_profile(user["id"]) or {}
+    if source not in {"xlsx", "camaleom"}:
+        raise HTTPException(status_code=400, detail="Origen de datos invalido.")
 
     org = azure_org or AZURE_ORG
     project = azure_project or AZURE_PROJECT
     team = azure_team or AZURE_TEAM
-    db.save_profile(user["id"], org, project, team, diferenciador or "", (db.get_profile(user["id"]) or {}).get("camaleom_user") or "", None)
+
+    excel_path = None
+    camaleom_user = ""
+    camaleom_pass = ""
+
+    if source == "camaleom":
+        camaleom_user = profile.get("camaleom_user") or ""
+        if not camaleom_user or not profile.get("camaleom_pass_enc"):
+            raise HTTPException(status_code=400, detail="Para el modo Camaleom automatico guarda tu usuario y contrasena de Camaleom en Perfil.")
+        camaleom_pass = db.decrypt(profile["camaleom_pass_enc"])
+    else:
+        if camaleom_excel is None or not camaleom_excel.filename:
+            raise HTTPException(status_code=400, detail="Sube el Excel de Camaleom o cambia al modo automatico.")
+        if not camaleom_excel.filename.lower().endswith((".xlsx", ".xls")):
+            raise HTTPException(status_code=400, detail="El archivo de Camaleom debe ser un Excel (.xlsx o .xls).")
+        DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        dest = DOWNLOAD_DIR / f"upload_{user['id']}_{uuid.uuid4().hex}{Path(camaleom_excel.filename).suffix or '.xlsx'}"
+        with dest.open("wb") as fh:
+            shutil.copyfileobj(camaleom_excel.file, fh)
+        excel_path = str(dest)
+
+    db.save_profile(user["id"], org, project, team, diferenciador or "", profile.get("camaleom_user") or "", None)
 
     params = {
-        "excel_path": str(excel_path),
+        "source": source,
+        "excel_path": excel_path,
+        "camaleom_user": camaleom_user,
+        "camaleom_pass": camaleom_pass,
         "fecha_final": fecha_final_d,
         "dias_atras": int(dias_atras),
         "sprints_txt": sprints,

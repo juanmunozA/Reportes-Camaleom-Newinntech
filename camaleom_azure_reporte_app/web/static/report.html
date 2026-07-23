@@ -9,26 +9,26 @@
 <body>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="logo"><span class="sq">◆</span> Reporte</div>
-    <div class="nav-item" onclick="location.href='/'"><span class="ic">←</span> Volver a la app</div>
+    <div class="logo"><span class="sq" data-ic="logo"></span> Reporte</div>
+    <div class="nav-item" onclick="location.href='/'"><span class="ic" data-ic="back"></span> Volver a la app</div>
     <div class="nav-sep"></div>
-    <div class="nav-item active" data-view="resumen"><span class="ic">📊</span> Resumen</div>
-    <div class="nav-item" data-view="horas"><span class="ic">🕐</span> Horas por día</div>
-    <div class="nav-item" data-view="azure"><span class="ic">🧩</span> Items de Azure</div>
-    <div class="nav-item" data-view="grafico"><span class="ic">📈</span> Gráfico</div>
-    <div class="nav-item" data-view="reportadas"><span class="ic">✅</span> Tasks reportadas</div>
-    <div class="nav-item" data-view="sinreportar"><span class="ic">⚠️</span> Tasks sin reportar</div>
-    <div class="nav-item" data-view="camaleom"><span class="ic">🔎</span> Camaleom sin coincidencia</div>
-    <div class="nav-item" data-view="revision"><span class="ic">🧐</span> Revisión manual</div>
+    <div class="nav-item active" data-view="resumen"><span class="ic" data-ic="grid"></span> Resumen</div>
+    <div class="nav-item" data-view="horas"><span class="ic" data-ic="clock"></span> Horas por día</div>
+    <div class="nav-item" data-view="azure"><span class="ic" data-ic="box"></span> Items de Azure</div>
+    <div class="nav-item" data-view="grafico"><span class="ic" data-ic="chart"></span> Gráfico</div>
+    <div class="nav-item" data-view="reportadas"><span class="ic" data-ic="check"></span> Tasks reportadas</div>
+    <div class="nav-item" data-view="sinreportar"><span class="ic" data-ic="alert"></span> Tasks sin reportar</div>
+    <div class="nav-item" data-view="camaleom"><span class="ic" data-ic="search"></span> Camaleom sin coincidencia</div>
+    <div class="nav-item" data-view="revision"><span class="ic" data-ic="eye"></span> Revisión manual</div>
     <div class="nav-spacer"></div>
-    <div class="nav-item" id="dlExcel"><span class="ic">⬇️</span> Descargar Excel</div>
+    <div class="nav-item" id="dlExcel"><span class="ic" data-ic="download"></span> Descargar Excel</div>
   </aside>
 
   <main class="content">
     <div class="mobile-bar"><button id="menuBtn">☰</button><strong>Reporte</strong></div>
 
     <div class="page-head">
-      <h1>📊 Resumen</h1>
+      <h1><span class="accent-bar"></span><span id="pageTitle">Resumen</span></h1>
       <p id="metaLine">Cargando…</p>
     </div>
 
@@ -58,19 +58,20 @@
   </main>
 </div>
 
-<!-- Chatbot -->
-<button class="chat-fab" id="chatFab" title="Asistente IA">🤖</button>
+<button class="chat-fab" id="chatFab" title="Asistente IA"><span data-ic="chat"></span></button>
 <div class="chat-panel" id="chatPanel">
   <div class="chat-head"><span class="ai-dot"></span><div><strong>Asistente IA</strong><small>Pregúntame sobre tus tasks y horas</small></div><button class="close" id="chatClose">✕</button></div>
   <div class="chat-body" id="chatBody"></div>
   <div class="chat-suggest" id="chatSuggest"></div>
-  <div class="chat-input"><input id="chatInput" placeholder="¿Qué me falta por reportar?"><button id="chatSend">➤</button></div>
+  <div class="chat-input"><input id="chatInput" placeholder="¿Qué me falta por reportar?"><button id="chatSend" data-ic="chat"></button></div>
 </div>
 
+<script src="/static/icons.js"></script>
 <script>
 const params = new URLSearchParams(location.search);
 const RUN_ID = params.get("run");
 let DATA = null;
+renderIcons();
 
 const KPIS = [
   ["items_azure","Items Azure","","cyan"],["hu_azure","HU Azure","","purple"],["tasks_azure","Tasks Azure","","cyan"],
@@ -107,7 +108,8 @@ async function load() {
   DATA = await r.json();
   const meta = DATA.meta || {};
   document.getElementById("metaLine").textContent = `Período ${meta.periodo_inicio} → ${meta.periodo_fin} · Persona: ${meta.persona} · Sprints: ${(meta.sprints||[]).join(", ")}`;
-  renderKPIs(); renderGlossary(); renderTables(); renderChart(); document.getElementById("dlExcel").onclick = () => location.href = `/api/runs/${RUN_ID}/excel`;
+  renderKPIs(); renderGlossary(); renderTables(); renderChart();
+  document.getElementById("dlExcel").onclick = () => location.href = `/api/runs/${RUN_ID}/excel`;
 }
 
 function renderKPIs() {
@@ -127,7 +129,7 @@ function renderGlossary() {
   ).join("");
 }
 
-const QUICK = [["horas","🕐 Horas por día"],["azure","🧩 Items de Azure"],["grafico","📈 Gráfico"],["reportadas","✅ Tasks reportadas"],["sinreportar","⚠️ Tasks sin reportar"],["camaleom","🔎 Camaleom sin coincidencia"],["revision","🧐 Revisión manual"]];
+const QUICK = [["horas","Horas por día"],["azure","Items de Azure"],["grafico","Gráfico"],["reportadas","Tasks reportadas"],["sinreportar","Tasks sin reportar"],["camaleom","Camaleom sin coincidencia"],["revision","Revisión manual"]];
 document.getElementById("quickLinks").innerHTML = QUICK.map(([v,l])=>`<button onclick="showView('${v}')">${l}</button>`).join("");
 
 function tableHTML(rows) {
@@ -171,18 +173,18 @@ function showView(v) {
   document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.classList.toggle("active", n.dataset.view===v));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
   document.getElementById("view-"+v).classList.add("active");
-  const titles = {resumen:"📊 Resumen",horas:"🕐 Horas por día",azure:"🧩 Items de Azure",grafico:"📈 Gráfico",reportadas:"✅ Tasks reportadas",sinreportar:"⚠️ Tasks sin reportar",camaleom:"🔎 Camaleom sin coincidencia",revision:"🧐 Revisión manual"};
-  document.querySelector(".page-head h1").textContent = titles[v] || "Reporte";
+  const titles = {resumen:"Resumen",horas:"Horas por día",azure:"Items de Azure",grafico:"Gráfico",reportadas:"Tasks reportadas",sinreportar:"Tasks sin reportar",camaleom:"Camaleom sin coincidencia",revision:"Revisión manual"};
+  document.getElementById("pageTitle").textContent = titles[v] || "Reporte";
   document.getElementById("sidebar").classList.remove("open");
 }
 document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.addEventListener("click",()=>showView(n.dataset.view)));
 document.getElementById("menuBtn").addEventListener("click",()=>document.getElementById("sidebar").classList.toggle("open"));
 
-/* ---------- Chatbot ---------- */
+/* Chatbot */
 const chatHistory = [];
 const SUGGEST = ["¿Qué me falta por reportar?","¿Cuántas horas llevo vs esperado?","¿Qué tasks están completas?","Resume mi sprint"];
 document.getElementById("chatSuggest").innerHTML = SUGGEST.map(s=>`<button onclick="ask('${s.replace(/'/g,"\\'")}')">${s}</button>`).join("");
-document.getElementById("chatFab").addEventListener("click",()=>{const p=document.getElementById("chatPanel");p.classList.toggle("show");if(p.classList.contains("show")&&!chatHistory.length)botMsg("¡Hola! Soy tu asistente. Pregúntame lo que quieras sobre tus tasks, horas reportadas o lo que te falta.");});
+document.getElementById("chatFab").addEventListener("click",()=>{const p=document.getElementById("chatPanel");p.classList.toggle("show");if(p.classList.contains("show")&&!chatHistory.length)botMsg("Hola, soy tu asistente. Pregúntame sobre tus tasks, horas reportadas o lo que te falta por reportar.");});
 document.getElementById("chatClose").addEventListener("click",()=>document.getElementById("chatPanel").classList.remove("show"));
 document.getElementById("chatSend").addEventListener("click",()=>ask(document.getElementById("chatInput").value));
 document.getElementById("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter")ask(document.getElementById("chatInput").value);});
@@ -198,9 +200,9 @@ async function ask(q) {
     const r = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({run_id:RUN_ID,question:q,history:chatHistory})});
     const d = await r.json();
     typing.remove();
-    if (!r.ok) { botMsg("⚠️ " + (d.detail||"Error")); return; }
+    if (!r.ok) { botMsg("No pude responder: " + (d.detail||"error")); return; }
     addMsg(d.answer,"bot"); chatHistory.push({role:"model",text:d.answer});
-  } catch(e){ typing.remove(); botMsg("⚠️ No pude responder: "+e.message); }
+  } catch(e){ typing.remove(); botMsg("No pude responder: "+e.message); }
 }
 
 load();

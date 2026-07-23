@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reporte · Camaleom + Azure</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="logo"><span class="sq">◆</span> Reporte</div>
+    <div class="nav-item" onclick="location.href='/'"><span class="ic">←</span> Volver a la app</div>
+    <div class="nav-sep"></div>
+    <div class="nav-item active" data-view="resumen"><span class="ic">📊</span> Resumen</div>
+    <div class="nav-item" data-view="horas"><span class="ic">🕐</span> Horas por día</div>
+    <div class="nav-item" data-view="azure"><span class="ic">🧩</span> Items de Azure</div>
+    <div class="nav-item" data-view="grafico"><span class="ic">📈</span> Gráfico</div>
+    <div class="nav-item" data-view="reportadas"><span class="ic">✅</span> Tasks reportadas</div>
+    <div class="nav-item" data-view="sinreportar"><span class="ic">⚠️</span> Tasks sin reportar</div>
+    <div class="nav-item" data-view="camaleom"><span class="ic">🔎</span> Camaleom sin coincidencia</div>
+    <div class="nav-item" data-view="revision"><span class="ic">🧐</span> Revisión manual</div>
+    <div class="nav-spacer"></div>
+    <div class="nav-item" id="dlExcel"><span class="ic">⬇️</span> Descargar Excel</div>
+  </aside>
+
+  <main class="content">
+    <div class="mobile-bar"><button id="menuBtn">☰</button><strong>Reporte</strong></div>
+
+    <div class="page-head">
+      <h1>📊 Resumen</h1>
+      <p id="metaLine">Cargando…</p>
+    </div>
+
+    <section class="view active" id="view-resumen">
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <h2 style="margin:6px 0 10px; font-size:15px">Accesos rápidos</h2>
+      <div class="quick-links" id="quickLinks"></div>
+      <div class="section-card">
+        <h2>¿Qué significa cada indicador?</h2>
+        <div class="grid-3" id="glossary" style="margin-top:12px"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-horas"><div id="tbl-horas"></div></section>
+    <section class="view" id="view-azure"><div id="tbl-azure"></div></section>
+    <section class="view" id="view-grafico">
+      <div class="section-card">
+        <h2>Horas reportadas vs esperadas por día</h2>
+        <div class="legend"><span><span class="sw" style="background:linear-gradient(135deg,#8b5cf6,#22d3ee)"></span>Reportadas</span><span><span class="sw" style="background:rgba(255,255,255,.14)"></span>Esperadas</span></div>
+        <div class="bars" id="bars"></div>
+      </div>
+    </section>
+    <section class="view" id="view-reportadas"><div id="tbl-reportadas"></div></section>
+    <section class="view" id="view-sinreportar"><div id="tbl-sinreportar"></div></section>
+    <section class="view" id="view-camaleom"><div id="tbl-camaleom"></div></section>
+    <section class="view" id="view-revision"><div id="tbl-revision"></div></section>
+  </main>
+</div>
+
+<!-- Chatbot -->
+<button class="chat-fab" id="chatFab" title="Asistente IA">🤖</button>
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-head"><span class="ai-dot"></span><div><strong>Asistente IA</strong><small>Pregúntame sobre tus tasks y horas</small></div><button class="close" id="chatClose">✕</button></div>
+  <div class="chat-body" id="chatBody"></div>
+  <div class="chat-suggest" id="chatSuggest"></div>
+  <div class="chat-input"><input id="chatInput" placeholder="¿Qué me falta por reportar?"><button id="chatSend">➤</button></div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const RUN_ID = params.get("run");
+let DATA = null;
+
+const KPIS = [
+  ["items_azure","Items Azure","","cyan"],["hu_azure","HU Azure","","purple"],["tasks_azure","Tasks Azure","","cyan"],
+  ["tasks_reportadas","Tasks reportadas","","ok"],["tasks_sin_reportar","Tasks sin reportar","","bad"],
+  ["cobertura_tasks","Cobertura de tasks","%","cyan"],["registros_camaleom_asociados","Registros Camaleom","","purple"],
+  ["tasks_asociadas","Tasks asociadas","","ok"],["tasks_completas","Tasks completas","","ok"],
+  ["tasks_pendientes_horas","Tasks pendientes","","warn"],["cobertura_asociacion","Cobertura asociación","%","cyan"],
+  ["cobertura_horas","Cobertura de horas","%","ok"],["total_reportado","Total reportado","h","info"],
+  ["total_esperado","Total esperado","h","info"],["balance","Balance","h","bal"],["total_horas_faltantes","Horas faltantes","h","warn"],
+];
+const GLOSSARY = {
+  items_azure:"Total de elementos en Azure DevOps (HU y Tasks).",
+  hu_azure:"Historias de usuario / PBIs que agrupan las Tasks.",
+  tasks_azure:"Tareas asociadas a las HU, con horas estimadas.",
+  tasks_reportadas:"Tasks con al menos un registro de Camaleom asociado correctamente.",
+  tasks_sin_reportar:"Tasks sin horas registradas en Camaleom, o con menos de las estimadas.",
+  cobertura_tasks:"Tasks reportadas frente al total de Tasks de Azure.",
+  registros_camaleom_asociados:"Filas de Camaleom vinculadas con alguna Task.",
+  tasks_asociadas:"Tasks con al menos un registro válido de Camaleom.",
+  tasks_completas:"Tasks donde las horas reportadas igualan o superan la estimación.",
+  tasks_pendientes_horas:"Tasks a las que aún les faltan horas por reportar.",
+  cobertura_asociacion:"% de Tasks con al menos un registro de Camaleom.",
+  cobertura_horas:"% de Tasks con las horas reportadas completas.",
+  total_reportado:"Suma de horas registradas en Camaleom en el período.",
+  total_esperado:"Horas laborales esperadas para el período.",
+  balance:"Diferencia entre lo reportado y lo esperado.",
+  total_horas_faltantes:"Suma de horas que aún faltan por reportar en todas las Tasks.",
+};
+
+async function load() {
+  if (!RUN_ID) { document.getElementById("metaLine").textContent = "No se indicó ejecución."; return; }
+  const r = await fetch("/api/runs/" + RUN_ID);
+  if (!r.ok) { document.getElementById("metaLine").textContent = "No pude cargar el reporte."; return; }
+  DATA = await r.json();
+  const meta = DATA.meta || {};
+  document.getElementById("metaLine").textContent = `Período ${meta.periodo_inicio} → ${meta.periodo_fin} · Persona: ${meta.persona} · Sprints: ${(meta.sprints||[]).join(", ")}`;
+  renderKPIs(); renderGlossary(); renderTables(); renderChart(); document.getElementById("dlExcel").onclick = () => location.href = `/api/runs/${RUN_ID}/excel`;
+}
+
+function renderKPIs() {
+  const m = DATA.metrics || {};
+  document.getElementById("kpiGrid").innerHTML = KPIS.map(([k,label,suf,color]) => {
+    let v = m[k]; if (v===undefined||v===null) v = "-";
+    let cls = color, vcls = "";
+    if (color === "bal") { cls = (m[k]||0) < 0 ? "bad" : "ok"; vcls = (m[k]||0) < 0 ? "bad" : "ok"; }
+    if (k === "tasks_sin_reportar" && (m[k]||0) > 0) vcls = "bad";
+    return `<div class="kpi ${cls}"><div class="k-label">${label}</div><div class="k-value ${vcls}">${v}${suf}</div></div>`;
+  }).join("");
+}
+function renderGlossary() {
+  const m = DATA.metrics || {};
+  document.getElementById("glossary").innerHTML = KPIS.map(([k,label]) =>
+    `<div class="section-card" style="margin:0"><div style="font-weight:700;font-size:13px;margin-bottom:4px">${label}: <span style="color:var(--accent-2)">${m[k]??"-"}</span></div><div style="color:var(--muted);font-size:12px">${GLOSSARY[k]||""}</div></div>`
+  ).join("");
+}
+
+const QUICK = [["horas","🕐 Horas por día"],["azure","🧩 Items de Azure"],["grafico","📈 Gráfico"],["reportadas","✅ Tasks reportadas"],["sinreportar","⚠️ Tasks sin reportar"],["camaleom","🔎 Camaleom sin coincidencia"],["revision","🧐 Revisión manual"]];
+document.getElementById("quickLinks").innerHTML = QUICK.map(([v,l])=>`<button onclick="showView('${v}')">${l}</button>`).join("");
+
+function tableHTML(rows) {
+  if (!rows || !rows.length) return '<div class="table-wrap"><div class="empty">Sin datos para esta vista.</div></div>';
+  const cols = Object.keys(rows[0]);
+  const head = cols.map(c=>`<th>${c}</th>`).join("");
+  const body = rows.map(row => "<tr>" + cols.map(c => {
+    let v = row[c]; const num = /^-?\d+(\.\d+)?$/.test(String(v));
+    if (c === "Estado reporte") {
+      const cl = v==="Reportada"?"ok":(v==="Falta reportar"?"bad":(v==="Solo Camaleom"?"warn":"muted"));
+      v = `<span class="pill ${cl}">${v}</span>`;
+    }
+    return `<td class="${num?'num':''}">${v}</td>`;
+  }).join("") + "</tr>").join("");
+  return `<input class="search" placeholder="Buscar en esta tabla…" oninput="filterTable(this)"><div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function filterTable(inp){ const q=inp.value.toLowerCase(); inp.parentElement.querySelectorAll("tbody tr").forEach(tr=>{tr.style.display=tr.innerText.toLowerCase().includes(q)?"":"none";}); }
+
+function renderTables() {
+  const t = DATA.tables || {};
+  document.getElementById("tbl-horas").innerHTML = tableHTML(t.horas_dia);
+  document.getElementById("tbl-azure").innerHTML = tableHTML(t.azure_items);
+  document.getElementById("tbl-reportadas").innerHTML = tableHTML(t.tasks_reportadas);
+  document.getElementById("tbl-sinreportar").innerHTML = tableHTML(t.tasks_sin_reportar);
+  document.getElementById("tbl-camaleom").innerHTML = tableHTML(t.camaleom_sin_coincidencia);
+  document.getElementById("tbl-revision").innerHTML = tableHTML(t.revision_manual);
+}
+
+function renderChart() {
+  const g = DATA.grafico || [];
+  if (!g.length) { document.getElementById("bars").innerHTML = '<div class="empty">Sin datos.</div>'; return; }
+  const max = Math.max(1, ...g.map(d=>Math.max(d.reportadas, d.esperadas)));
+  document.getElementById("bars").innerHTML = g.map(d => {
+    const hr = Math.round(180 * d.reportadas / max), he = Math.round(180 * d.esperadas / max);
+    const dd = (d.fecha||"").slice(5);
+    return `<div class="bar-col"><div class="bar-stack"><div class="bar rep" style="height:${hr}px" title="Reportadas: ${d.reportadas}h"></div><div class="bar esp" style="height:${he}px" title="Esperadas: ${d.esperadas}h"></div></div><div class="bar-lbl">${dd}</div></div>`;
+  }).join("");
+}
+
+function showView(v) {
+  document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.classList.toggle("active", n.dataset.view===v));
+  document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
+  document.getElementById("view-"+v).classList.add("active");
+  const titles = {resumen:"📊 Resumen",horas:"🕐 Horas por día",azure:"🧩 Items de Azure",grafico:"📈 Gráfico",reportadas:"✅ Tasks reportadas",sinreportar:"⚠️ Tasks sin reportar",camaleom:"🔎 Camaleom sin coincidencia",revision:"🧐 Revisión manual"};
+  document.querySelector(".page-head h1").textContent = titles[v] || "Reporte";
+  document.getElementById("sidebar").classList.remove("open");
+}
+document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.addEventListener("click",()=>showView(n.dataset.view)));
+document.getElementById("menuBtn").addEventListener("click",()=>document.getElementById("sidebar").classList.toggle("open"));
+
+/* ---------- Chatbot ---------- */
+const chatHistory = [];
+const SUGGEST = ["¿Qué me falta por reportar?","¿Cuántas horas llevo vs esperado?","¿Qué tasks están completas?","Resume mi sprint"];
+document.getElementById("chatSuggest").innerHTML = SUGGEST.map(s=>`<button onclick="ask('${s.replace(/'/g,"\\'")}')">${s}</button>`).join("");
+document.getElementById("chatFab").addEventListener("click",()=>{const p=document.getElementById("chatPanel");p.classList.toggle("show");if(p.classList.contains("show")&&!chatHistory.length)botMsg("¡Hola! Soy tu asistente. Pregúntame lo que quieras sobre tus tasks, horas reportadas o lo que te falta.");});
+document.getElementById("chatClose").addEventListener("click",()=>document.getElementById("chatPanel").classList.remove("show"));
+document.getElementById("chatSend").addEventListener("click",()=>ask(document.getElementById("chatInput").value));
+document.getElementById("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter")ask(document.getElementById("chatInput").value);});
+
+function addMsg(text, who){ const b=document.getElementById("chatBody"); const d=document.createElement("div"); d.className="msg "+who; d.textContent=text; b.appendChild(d); b.scrollTop=b.scrollHeight; return d; }
+function botMsg(t){ addMsg(t,"bot"); }
+async function ask(q) {
+  q = (q||"").trim(); if (!q) return;
+  document.getElementById("chatInput").value = "";
+  addMsg(q,"user"); chatHistory.push({role:"user",text:q});
+  const typing = addMsg("Pensando…","bot typing");
+  try {
+    const r = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({run_id:RUN_ID,question:q,history:chatHistory})});
+    const d = await r.json();
+    typing.remove();
+    if (!r.ok) { botMsg("⚠️ " + (d.detail||"Error")); return; }
+    addMsg(d.answer,"bot"); chatHistory.push({role:"model",text:d.answer});
+  } catch(e){ typing.remove(); botMsg("⚠️ No pude responder: "+e.message); }
+}
+
+load();
+</script>
+</body>
+</html>

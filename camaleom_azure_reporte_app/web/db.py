@@ -30,6 +30,20 @@ CREATE TABLE IF NOT EXISTS camaleom_profiles (
     camaleom_pass_enc TEXT,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS app_runs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    periodo_inicio DATE,
+    periodo_fin DATE,
+    sprints TEXT,
+    persona TEXT,
+    data JSONB NOT NULL,
+    xlsx BYTEA
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_runs_user ON app_runs(user_id, created_at DESC);
 """
 
 
@@ -162,3 +176,66 @@ def get_profile(user_id: int) -> dict[str, Any] | None:
             cur.execute("SELECT * FROM camaleom_profiles WHERE user_id = %s", (user_id,))
             row = cur.fetchone()
             return dict(row) if row else None
+
+
+def create_run(user_id: int, data: dict, xlsx: bytes | None) -> int:
+    import json
+    meta = data.get("meta", {})
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO app_runs (user_id, periodo_inicio, periodo_fin, sprints, persona, data, xlsx)
+                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+                """,
+                (
+                    user_id,
+                    meta.get("periodo_inicio"),
+                    meta.get("periodo_fin"),
+                    ",".join(str(s) for s in meta.get("sprints", [])),
+                    meta.get("persona", ""),
+                    json.dumps(data),
+                    psycopg2.Binary(xlsx) if xlsx else None,
+                ),
+            )
+            return cur.fetchone()[0]
+
+
+def list_runs(user_id: int, limit: int = 50) -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, created_at, periodo_inicio, periodo_fin, sprints, persona,
+                       data->'metrics' AS metrics
+                FROM app_runs WHERE user_id = %s ORDER BY created_at DESC LIMIT %s
+                """,
+                (user_id, limit),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+
+def get_run(user_id: int, run_id: int) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT id, created_at, data FROM app_runs WHERE id = %s AND user_id = %s", (run_id, user_id))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+def get_run_xlsx(user_id: int, run_id: int) -> bytes | None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT xlsx FROM app_runs WHERE id = %s AND user_id = %s", (run_id, user_id))
+            row = cur.fetchone()
+            return bytes(row[0]) if row and row[0] else None
+
+
+def count_runs_today(user_id: int) -> int:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) FROM app_runs WHERE user_id = %s AND created_at::date = (now() at time zone 'America/Bogota')::date",
+                (user_id,),
+            )
+            return int(cur.fetchone()[0])

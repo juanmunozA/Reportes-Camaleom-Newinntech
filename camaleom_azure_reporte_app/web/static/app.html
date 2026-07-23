@@ -3,191 +3,268 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reportes Camaleom + Azure</title>
+<title>Reporte de Horas</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="brand">◆ Camaleom + Azure</div>
-  <div class="user-info">
-    <span id="userEmail"></span>
-    <button class="link" id="logoutBtn">Salir</button>
-  </div>
-</header>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="logo"><span class="sq">◆</span> Reporte de Horas</div>
+    <div class="nav-item active" data-view="inicio"><span class="ic">🏠</span> Inicio</div>
+    <div class="nav-item" data-view="nueva"><span class="ic">✨</span> Nueva ejecución</div>
+    <div class="nav-item" data-view="ejecuciones"><span class="ic">🗂️</span> Mis ejecuciones</div>
+    <div class="nav-item" data-view="perfil"><span class="ic">👤</span> Perfil</div>
+    <div class="nav-spacer"></div>
+    <div class="nav-sep"></div>
+    <div class="nav-item" id="logoutBtn"><span class="ic">⎋</span> Cerrar sesión</div>
+  </aside>
 
-<main class="app-main">
-  <div class="section-card">
-    <h2>Perfil Azure</h2>
-    <p class="hint">Se guarda y se reutiliza en las proximas ejecuciones. Azure se consulta con el PAT del servidor (sin MFA).</p>
-    <div class="grid-2">
-      <div><label>Organizacion Azure</label><input id="azureOrg"></div>
-      <div><label>Proyecto Azure</label><input id="azureProject"></div>
-      <div><label>Equipo Azure</label><input id="azureTeam"></div>
-      <div><label>Nombre completo (asignado a)</label><input id="azureFullName"></div>
-    </div>
-  </div>
+  <main class="content">
+    <div class="mobile-bar"><button id="menuBtn">☰</button><strong>Reporte de Horas</strong></div>
 
-  <div class="section-card">
-    <h2>Ejecucion</h2>
-    <p class="hint">Indica el o los sprints de Azure, el rango de fechas del analisis, y sube el Excel de Camaleom (Reportes &gt; Mis Actividades &gt; Exportar).</p>
-    <label>Sprint(s), separados por coma</label>
-    <input id="sprints" placeholder="279" value="279">
-    <button class="link" id="detectBtn" type="button">Detectar fecha fin del sprint en Azure</button>
-    <div class="grid-2">
-      <div><label>Fecha inicio (analisis)</label><input type="date" id="fechaInicio"></div>
-      <div><label>Fecha fin (analisis)</label><input type="date" id="fechaFin"></div>
-    </div>
-    <label>Excel de Camaleom (.xlsx)</label>
-    <div class="file-drop" id="fileDrop">
-      <input type="file" id="camaleomExcel" accept=".xlsx,.xls" hidden>
-      <span id="fileLabel">Haz clic para seleccionar el Excel de tus actividades de Camaleom</span>
-    </div>
-    <button class="primary" id="runBtn">Generar reporte</button>
-    <div class="error-msg" id="errorMsg"></div>
-  </div>
+    <!-- INICIO -->
+    <section class="view active" id="view-inicio">
+      <div class="page-head"><h1>👋 Hola, <span id="helloName"></span></h1><p>Resumen de tu actividad y accesos rápidos.</p></div>
+      <div class="kpi-grid">
+        <div class="kpi cyan"><div class="k-label">Ejecuciones hoy</div><div class="k-value" id="kRunsToday">0 / 8</div></div>
+        <div class="kpi purple"><div class="k-label">Total ejecuciones</div><div class="k-value" id="kRunsTotal">0</div></div>
+        <div class="kpi ok"><div class="k-label">Gemini IA</div><div class="k-value" id="kGemini" style="font-size:18px">—</div></div>
+      </div>
+      <div class="section-card">
+        <h2>Empieza un análisis</h2>
+        <p class="hint">Sube tu Excel de Camaleom y cruza tus horas contra Azure DevOps por sprint.</p>
+        <button class="btn grad" data-goto="nueva">✨ Nueva ejecución</button>
+        <button class="btn" data-goto="ejecuciones">🗂️ Ver mis ejecuciones</button>
+      </div>
+      <div class="section-card">
+        <h2>Última ejecución</h2>
+        <div id="lastRunBox"><p class="hint">Aún no tienes ejecuciones.</p></div>
+      </div>
+    </section>
 
-  <div class="section-card" id="resultCard" style="display:none">
-    <h2>Reporte generado</h2>
-    <div class="result-bar">
-      <a class="btn" id="openReport" target="_blank">Abrir en pestana nueva</a>
-      <a class="btn" id="downloadExcel">Descargar Excel</a>
-    </div>
-    <iframe class="report-frame" id="reportFrame"></iframe>
-  </div>
-</main>
+    <!-- NUEVA EJECUCION -->
+    <section class="view" id="view-nueva">
+      <div class="page-head"><h1>✨ Nueva ejecución</h1><p>Configura el período y las fuentes que se usarán para generar el análisis.</p></div>
+
+      <div class="section-card">
+        <h2>Resumen de configuración</h2>
+        <div class="grid-3" style="margin-top:12px">
+          <div class="kpi cyan"><div class="k-label">Diferenciador Azure</div><div class="k-value" id="cfgDiff" style="font-size:18px">—</div></div>
+          <div class="kpi purple"><div class="k-label">Gemini</div><div class="k-value" id="cfgGemini" style="font-size:18px">—</div></div>
+          <div class="kpi ok"><div class="k-label">Ejecuciones hoy</div><div class="k-value" id="cfgRuns" style="font-size:18px">0 / 8</div></div>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="section-card">
+          <h2>1. Origen de los datos</h2>
+          <p class="hint">Sube el Excel exportado por Camaleom (Reportes › Mis Actividades › Exportar).</p>
+          <div class="file-drop" id="fileDrop">
+            <input type="file" id="camaleomExcel" accept=".xlsx,.xls" hidden>
+            <span id="fileLabel">Clic para seleccionar el Excel de Camaleom</span>
+          </div>
+          <label>Diferenciador Azure DevOps</label>
+          <input id="diferenciador" placeholder="ej: muñoz">
+        </div>
+
+        <div class="section-card">
+          <h2>2. Período</h2>
+          <label>Fecha final</label>
+          <input type="date" id="fechaFinal">
+          <label>Días hacia atrás</label>
+          <input type="number" id="diasAtras" value="21" min="1">
+          <label>Sprints específicos (opcional)</label>
+          <input id="sprints" placeholder="280 o 279,280">
+          <p class="hint" style="margin-top:10px">Vacío = detección automática por rango de fechas.</p>
+        </div>
+
+        <div class="section-card">
+          <h2>3. Resumen previo</h2>
+          <p class="hint">Período efectivo estimado según fecha final y días hacia atrás.</p>
+          <div class="kpi info" style="margin-top:8px"><div class="k-label">Período efectivo</div><div class="k-value" id="periodoPreview" style="font-size:15px">—</div></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <button class="primary" id="runBtn" style="max-width:280px">▶ Ejecutar análisis</button>
+        <div class="error-msg" id="errorMsg"></div>
+      </div>
+    </section>
+
+    <!-- MIS EJECUCIONES -->
+    <section class="view" id="view-ejecuciones">
+      <div class="page-head"><h1>🗂️ Mis ejecuciones</h1><p>Historial de análisis generados. Haz clic para abrir el reporte.</p></div>
+      <div id="runsList"><p class="hint">Cargando…</p></div>
+    </section>
+
+    <!-- PERFIL -->
+    <section class="view" id="view-perfil">
+      <div class="page-head"><h1>👤 Perfil</h1><p>Configuración de Azure que se reutiliza en cada ejecución.</p></div>
+      <div class="section-card">
+        <h2>Datos</h2>
+        <div style="margin:10px 0"><label>Email</label><input id="pEmail" disabled></div>
+        <div class="grid-2">
+          <div><label>Organización Azure</label><input id="azureOrg"></div>
+          <div><label>Proyecto Azure</label><input id="azureProject"></div>
+          <div><label>Equipo Azure</label><input id="azureTeam"></div>
+          <div><label>Diferenciador (nombre/apellido)</label><input id="azureFullName"></div>
+        </div>
+        <button class="btn grad" id="saveProfileBtn" style="margin-top:16px">Guardar perfil</button>
+        <span id="profileSaved" style="color:var(--ok); font-size:13px; margin-left:12px; display:none">✓ Guardado</span>
+      </div>
+    </section>
+  </main>
+</div>
 
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
-  <div class="attempt-pill" id="attemptPill">Intento 1</div>
-  <p id="loadingText">Procesando el Excel de Camaleom y consultando Azure. Esto puede tardar un poco, no cierres esta pagina...</p>
+  <div class="attempt-pill" id="attemptPill">Procesando…</div>
+  <p id="loadingText">Consultando Azure y cruzando con tu Excel de Camaleom. No cierres esta página…</p>
   <div class="log-line" id="loadingLine"></div>
 </div>
 
 <script>
-let currentJob = null;
-let pollTimer = null;
+let ME = null;
+
+function nav(view) {
+  document.querySelectorAll(".nav-item[data-view]").forEach(n => n.classList.toggle("active", n.dataset.view === view));
+  document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+  document.getElementById("view-" + view).classList.add("active");
+  document.getElementById("sidebar").classList.remove("open");
+  if (view === "ejecuciones") loadRuns();
+}
+document.querySelectorAll(".nav-item[data-view]").forEach(n => n.addEventListener("click", () => nav(n.dataset.view)));
+document.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => nav(b.dataset.goto)));
+document.getElementById("menuBtn").addEventListener("click", () => document.getElementById("sidebar").classList.toggle("open"));
+document.getElementById("logoutBtn").addEventListener("click", async () => { await fetch("/api/logout", {method:"POST"}); location.href = "/"; });
 
 async function loadMe() {
-  const resp = await fetch("/api/me");
-  if (!resp.ok) { window.location.href = "/"; return; }
-  const data = await resp.json();
-  document.getElementById("userEmail").textContent = data.email;
-  const p = data.profile;
+  const r = await fetch("/api/me");
+  if (!r.ok) { location.href = "/"; return; }
+  ME = await r.json();
+  document.getElementById("helloName").textContent = ME.email.split("@")[0];
+  document.getElementById("pEmail").value = ME.email;
+  const runsTxt = `${ME.runs_today} / ${ME.daily_limit}`;
+  document.getElementById("kRunsToday").textContent = runsTxt;
+  document.getElementById("cfgRuns").textContent = runsTxt;
+  const gem = ME.gemini_enabled ? "Activo" : "No configurado";
+  document.getElementById("kGemini").textContent = gem;
+  document.getElementById("cfgGemini").textContent = gem;
+  const p = ME.profile;
   document.getElementById("azureOrg").value = p.azure_org || "";
   document.getElementById("azureProject").value = p.azure_project || "";
   document.getElementById("azureTeam").value = p.azure_team || "";
   document.getElementById("azureFullName").value = p.azure_full_name || "";
+  document.getElementById("diferenciador").value = p.azure_full_name || "";
+  document.getElementById("cfgDiff").textContent = p.azure_full_name || "—";
+  const today = new Date(); today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+  document.getElementById("fechaFinal").value = today.toISOString().slice(0,10);
+  updatePeriodo();
 }
 
-document.getElementById("logoutBtn").addEventListener("click", async () => {
-  await fetch("/api/logout", { method: "POST" });
-  window.location.href = "/";
-});
-
+// file
 const fileInput = document.getElementById("camaleomExcel");
-const fileDrop = document.getElementById("fileDrop");
-const fileLabel = document.getElementById("fileLabel");
-fileDrop.addEventListener("click", () => fileInput.click());
+document.getElementById("fileDrop").addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", () => {
-  fileLabel.textContent = fileInput.files.length ? "📄 " + fileInput.files[0].name : "Haz clic para seleccionar el Excel de tus actividades de Camaleom";
-  fileDrop.classList.toggle("has-file", fileInput.files.length > 0);
+  const d = document.getElementById("fileDrop");
+  document.getElementById("fileLabel").textContent = fileInput.files.length ? "📄 " + fileInput.files[0].name : "Clic para seleccionar el Excel de Camaleom";
+  d.classList.toggle("has-file", fileInput.files.length > 0);
 });
 
-document.getElementById("detectBtn").addEventListener("click", async () => {
-  const sprints = document.getElementById("sprints").value.trim();
-  if (!sprints) return;
-  const params = new URLSearchParams({
-    sprints,
-    azure_org: document.getElementById("azureOrg").value,
-    azure_project: document.getElementById("azureProject").value,
-    azure_team: document.getElementById("azureTeam").value,
-  });
-  const resp = await fetch("/api/azure/sprint-range?" + params.toString());
-  if (!resp.ok) {
-    const data = await resp.json().catch(() => ({}));
-    showError(data.detail || "No pude consultar Azure.");
-    return;
-  }
-  const data = await resp.json();
-  if (data.fecha_inicio) document.getElementById("fechaInicio").value = data.fecha_inicio;
-  if (data.fecha_fin) document.getElementById("fechaFin").value = data.fecha_fin;
-});
-
-function showError(msg) {
-  const el = document.getElementById("errorMsg");
-  el.textContent = msg;
-  el.classList.add("show");
+function updatePeriodo() {
+  const ff = document.getElementById("fechaFinal").value;
+  const dias = parseInt(document.getElementById("diasAtras").value || "0", 10);
+  if (!ff) { document.getElementById("periodoPreview").textContent = "—"; return; }
+  const fin = new Date(ff + "T00:00:00");
+  const ini = new Date(fin); ini.setDate(ini.getDate() - dias);
+  const fmt = d => d.toLocaleDateString("es-CO", {day:"2-digit", month:"2-digit", year:"numeric"});
+  document.getElementById("periodoPreview").textContent = `${fmt(ini)} → ${fmt(fin)}`;
 }
+document.getElementById("fechaFinal").addEventListener("input", updatePeriodo);
+document.getElementById("diasAtras").addEventListener("input", updatePeriodo);
+document.getElementById("diferenciador").addEventListener("input", e => document.getElementById("cfgDiff").textContent = e.target.value || "—");
+
+function showError(m){ const e=document.getElementById("errorMsg"); e.textContent=m; e.classList.add("show"); }
 
 document.getElementById("runBtn").addEventListener("click", async () => {
   document.getElementById("errorMsg").classList.remove("show");
-  const sprints = document.getElementById("sprints").value.trim();
-  const fechaInicio = document.getElementById("fechaInicio").value;
-  const fechaFin = document.getElementById("fechaFin").value;
-
-  if (!sprints || !fechaInicio || !fechaFin) {
-    showError("Completa sprint(s) y las fechas de analisis.");
-    return;
-  }
-  if (!fileInput.files.length) {
-    showError("Sube el Excel de Camaleom (Reportes > Mis Actividades > Exportar).");
-    return;
-  }
-
+  const ff = document.getElementById("fechaFinal").value;
+  if (!ff) return showError("Indica la fecha final.");
+  if (!fileInput.files.length) return showError("Sube el Excel de Camaleom.");
   const fd = new FormData();
-  fd.append("sprints", sprints);
-  fd.append("fecha_inicio", fechaInicio);
-  fd.append("fecha_fin", fechaFin);
+  fd.append("fecha_final", ff);
+  fd.append("dias_atras", document.getElementById("diasAtras").value || "21");
+  fd.append("sprints", document.getElementById("sprints").value.trim());
+  fd.append("diferenciador", document.getElementById("diferenciador").value.trim());
   fd.append("azure_org", document.getElementById("azureOrg").value);
   fd.append("azure_project", document.getElementById("azureProject").value);
   fd.append("azure_team", document.getElementById("azureTeam").value);
-  fd.append("azure_full_name", document.getElementById("azureFullName").value);
   fd.append("camaleom_excel", fileInput.files[0]);
-
   try {
-    const resp = await fetch("/api/run", { method: "POST", body: fd });
-    if (!resp.ok) {
-      const data = await resp.json().catch(() => ({}));
-      throw new Error(data.detail || "No pude iniciar el reporte.");
-    }
-    const data = await resp.json();
-    currentJob = data.job_id;
+    const r = await fetch("/api/run", { method:"POST", body: fd });
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || "No pude iniciar."); }
+    const { job_id } = await r.json();
     document.getElementById("loadingOverlay").classList.add("show");
-    pollStatus();
-  } catch (err) {
-    showError(err.message);
-  }
+    poll(job_id);
+  } catch(e){ showError(e.message); }
 });
 
-function pollStatus() {
-  clearTimeout(pollTimer);
-  pollTimer = setTimeout(async () => {
-    const resp = await fetch(`/api/run/${currentJob}/status`);
-    const data = await resp.json();
-    const lines = data.last_lines || [];
-    document.getElementById("loadingLine").textContent = lines.length ? lines[lines.length - 1] : "";
-    document.getElementById("attemptPill").textContent = `Intento ${Math.max(data.attempt || 1, 1)} de ${data.max_attempts || 1}`;
-
-    if (data.state === "ok") {
-      document.getElementById("loadingOverlay").classList.remove("show");
-      document.getElementById("resultCard").style.display = "block";
-      document.getElementById("openReport").href = `/api/run/${currentJob}/report`;
-      document.getElementById("downloadExcel").href = `/api/run/${currentJob}/excel`;
-      document.getElementById("reportFrame").src = `/api/run/${currentJob}/report`;
-    } else if (data.state === "failed") {
-      document.getElementById("loadingOverlay").classList.remove("show");
-      showError((data.error || "El reporte fallo.") + ` (despues de ${data.max_attempts || 1} intentos)`);
-    } else if (data.state === "retrying") {
-      document.getElementById("loadingText").textContent = "Un intento fallo, reintentando automaticamente...";
-      pollStatus();
-    } else {
-      document.getElementById("loadingText").textContent = "Procesando el Excel de Camaleom y consultando Azure. Esto puede tardar un poco, no cierres esta pagina...";
-      pollStatus();
-    }
+function poll(jobId) {
+  setTimeout(async () => {
+    const r = await fetch(`/api/run/${jobId}/status`);
+    const d = await r.json();
+    const lines = d.last_lines || [];
+    document.getElementById("loadingLine").textContent = lines.length ? lines[lines.length-1] : "";
+    document.getElementById("attemptPill").textContent = d.state === "retrying" ? `Reintentando (${d.attempt}/${d.max_attempts})` : "Procesando…";
+    if (d.state === "ok") { location.href = "/report?run=" + d.run_id; }
+    else if (d.state === "failed") { document.getElementById("loadingOverlay").classList.remove("show"); showError((d.error||"Falló")+` (tras ${d.max_attempts} intentos)`); }
+    else poll(jobId);
   }, 2000);
 }
 
-loadMe();
+async function loadRuns() {
+  const box = document.getElementById("runsList");
+  const r = await fetch("/api/runs");
+  const { runs } = await r.json();
+  document.getElementById("kRunsTotal").textContent = runs.length;
+  if (!runs.length) { box.innerHTML = '<p class="hint">Aún no tienes ejecuciones. Crea una en “Nueva ejecución”.</p>'; renderLast(null); return; }
+  renderLast(runs[0]);
+  box.innerHTML = runs.map(run => {
+    const m = run.metrics || {};
+    const fecha = new Date(run.created_at).toLocaleString("es-CO");
+    return `<div class="run-card" onclick="location.href='/report?run=${run.id}'">
+      <div class="r-main"><div class="r-title">Sprint ${run.sprints||"?"} · ${run.persona||"Todos"}</div>
+      <div class="r-sub">${run.periodo_inicio} → ${run.periodo_fin} · ${fecha}</div></div>
+      <div class="r-metric"><b>${m.tasks_reportadas??"-"}</b><span>reportadas</span></div>
+      <div class="r-metric"><b class="${(m.tasks_sin_reportar||0)>0?'':''}" style="color:${(m.tasks_sin_reportar||0)>0?'var(--bad)':'var(--ok)'}">${m.tasks_sin_reportar??"-"}</b><span>sin reportar</span></div>
+      <div class="r-metric"><b>${m.total_reportado??"-"}h</b><span>reportado</span></div>
+    </div>`;
+  }).join("");
+}
+
+function renderLast(run) {
+  const box = document.getElementById("lastRunBox");
+  if (!run) { box.innerHTML = '<p class="hint">Aún no tienes ejecuciones.</p>'; return; }
+  const m = run.metrics || {};
+  box.innerHTML = `<div class="run-card" onclick="location.href='/report?run=${run.id}'">
+    <div class="r-main"><div class="r-title">Sprint ${run.sprints||"?"} · ${run.persona||"Todos"}</div>
+    <div class="r-sub">${run.periodo_inicio} → ${run.periodo_fin}</div></div>
+    <div class="r-metric"><b style="color:${(m.balance||0)<0?'var(--bad)':'var(--ok)'}">${m.balance??"-"}h</b><span>balance</span></div>
+    <div class="r-metric"><b>${m.total_reportado??"-"}h</b><span>reportado</span></div>
+    <div class="btn grad">Abrir →</div></div>`;
+}
+
+document.getElementById("saveProfileBtn").addEventListener("click", async () => {
+  await fetch("/api/profile", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({
+    azure_org: document.getElementById("azureOrg").value,
+    azure_project: document.getElementById("azureProject").value,
+    azure_team: document.getElementById("azureTeam").value,
+    azure_full_name: document.getElementById("azureFullName").value,
+  })});
+  const s = document.getElementById("profileSaved"); s.style.display="inline"; setTimeout(()=>s.style.display="none", 2000);
+});
+
+loadMe().then(loadRuns);
 </script>
 </body>
 </html>

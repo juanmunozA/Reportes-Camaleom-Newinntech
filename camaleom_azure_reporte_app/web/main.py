@@ -1,21 +1,22 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-from pathlib import Path
-
 import shutil
 import uuid
+from datetime import date, datetime
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from ..azure_devops import AzureDevOpsClient
-from ..config import AZURE_DEVOPS_PAT, AZURE_ORG, AZURE_PROJECT, AZURE_TEAM, APP_SECRET_KEY, DOWNLOAD_DIR
-from . import db, jobs
+from ..config import (APP_SECRET_KEY, AZURE_DEVOPS_PAT, AZURE_ORG, AZURE_PROJECT,
+                      AZURE_TEAM, DOWNLOAD_DIR, GEMINI_API_KEY)
+from . import db, gemini, jobs
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+DAILY_LIMIT = 8
 
 app = FastAPI(title="Reportes Camaleom + Azure")
 
@@ -44,12 +45,33 @@ def require_user(request: Request) -> dict:
     return user
 
 
+def _parse_date(value: str) -> date:
+    value = (value or "").strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    raise HTTPException(status_code=400, detail=f"Fecha invalida: {value}")
+
+
+# ---------- Paginas ----------
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     if current_user(request):
         return FileResponse(STATIC_DIR / "app.html")
     return FileResponse(STATIC_DIR / "login.html")
 
+
+@app.get("/report", response_class=HTMLResponse)
+def report_page(request: Request):
+    if not current_user(request):
+        return FileResponse(STATIC_DIR / "login.html")
+    return FileResponse(STATIC_DIR / "report.html")
+
+
+# ---------- Auth ----------
 
 @app.post("/api/register")
 async def register(request: Request):
@@ -89,102 +111,99 @@ def me(request: Request):
     profile = db.get_profile(user["id"]) or {}
     return {
         "email": user["email"],
+        "gemini_enabled": bool(GEMINI_API_KEY),
+        "runs_today": db.count_runs_today(user["id"]),
+        "daily_limit": DAILY_LIMIT,
         "profile": {
             "azure_org": profile.get("azure_org") or AZURE_ORG,
             "azure_project": profile.get("azure_project") or AZURE_PROJECT,
             "azure_team": profile.get("azure_team") or AZURE_TEAM,
             "azure_full_name": profile.get("azure_full_name") or "",
-            "camaleom_user": profile.get("camaleom_user") or "",
-            "camaleom_pass_saved": bool(profile.get("camaleom_pass_enc")),
         },
     }
 
+
+@app.post("/api/profile")
+async def save_profile(request: Request):
+    user = require_user(request)
+    body = await request.json()
+    db.save_profile(
+        user["id"],
+        body.get("azure_org") or AZURE_ORG,
+        body.get("azure_project") or AZURE_PROJECT,
+        body.get("azure_team") or AZURE_TEAM,
+        body.get("azure_full_name") or "",
+        (db.get_profile(user["id"]) or {}).get("camaleom_user") or "",
+        None,
+    )
+    return {"ok": True}
+
+
+# ---------- Azure helper ----------
 
 @app.get("/api/azure/sprint-range")
 def sprint_range(sprints: str, azure_org: str = "", azure_project: str = "", azure_team: str = ""):
     if not AZURE_DEVOPS_PAT:
         raise HTTPException(status_code=500, detail="El servidor no tiene configurado AZURE_DEVOPS_PAT.")
-    org = azure_org or AZURE_ORG
-    project = azure_project or AZURE_PROJECT
-    team = azure_team or AZURE_TEAM
-    cliente = AzureDevOpsClient(org, project, team, pat=AZURE_DEVOPS_PAT)
-    sprint_nums = [int(s.strip()) for s in sprints.split(",") if s.strip()]
-    if not sprint_nums:
-        raise HTTPException(status_code=400, detail="Debes indicar al menos un sprint.")
+    cliente = AzureDevOpsClient(azure_org or AZURE_ORG, azure_project or AZURE_PROJECT, azure_team or AZURE_TEAM, pat=AZURE_DEVOPS_PAT)
+    nums = [int(s.strip()) for s in sprints.split(",") if s.strip()]
+    if not nums:
+        raise HTTPException(status_code=400, detail="Indica al menos un sprint.")
+    finishes = []
+    for numero in nums:
+        it = cliente.buscar_iteracion_sprint(numero)
+        attrs = it.get("attributes") or {}
+        if attrs.get("finishDate"):
+            finishes.append(datetime.fromisoformat(attrs["finishDate"].replace("Z", "+00:00")).date())
+    return {"fecha_fin": max(finishes).isoformat() if finishes else None}
 
-    starts: list[date] = []
-    finishes: list[date] = []
-    detalle = []
-    for numero in sprint_nums:
-        iteracion = cliente.buscar_iteracion_sprint(numero)
-        attrs = iteracion.get("attributes") or {}
-        start_raw = attrs.get("startDate")
-        finish_raw = attrs.get("finishDate")
-        start = datetime.fromisoformat(start_raw.replace("Z", "+00:00")).date() if start_raw else None
-        finish = datetime.fromisoformat(finish_raw.replace("Z", "+00:00")).date() if finish_raw else None
-        if start:
-            starts.append(start)
-        if finish:
-            finishes.append(finish)
-        detalle.append({"sprint": numero, "start": start.isoformat() if start else None, "finish": finish.isoformat() if finish else None})
 
-    return {
-        "sprints": detalle,
-        "fecha_inicio": min(starts).isoformat() if starts else None,
-        "fecha_fin": max(finishes).isoformat() if finishes else None,
-    }
-
+# ---------- Ejecucion ----------
 
 @app.post("/api/run")
 async def run_reporte(
     request: Request,
     camaleom_excel: UploadFile = File(...),
-    sprints: str = Form(...),
-    fecha_inicio: str = Form(...),
-    fecha_fin: str = Form(...),
+    fecha_final: str = Form(...),
+    dias_atras: int = Form(21),
+    sprints: str = Form(""),
+    diferenciador: str = Form(""),
     azure_org: str = Form(""),
     azure_project: str = Form(""),
     azure_team: str = Form(""),
-    azure_full_name: str = Form(""),
 ):
     user = require_user(request)
 
-    sprints = (sprints or "").strip()
-    azure_org = azure_org or AZURE_ORG
-    azure_project = azure_project or AZURE_PROJECT
-    azure_team = azure_team or AZURE_TEAM
+    if db.count_runs_today(user["id"]) >= DAILY_LIMIT:
+        raise HTTPException(status_code=429, detail=f"Alcanzaste el limite de {DAILY_LIMIT} ejecuciones por dia.")
 
-    if not sprints or not fecha_inicio or not fecha_fin:
-        raise HTTPException(status_code=400, detail="Faltan campos requeridos (sprint, fechas de analisis).")
+    fecha_final_d = _parse_date(fecha_final)
 
     filename = camaleom_excel.filename or "camaleom.xlsx"
     if not filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="El archivo de Camaleom debe ser un Excel (.xlsx o .xls).")
 
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    suffix = Path(filename).suffix or ".xlsx"
-    excel_path = DOWNLOAD_DIR / f"upload_{user['id']}_{uuid.uuid4().hex}{suffix}"
+    excel_path = DOWNLOAD_DIR / f"upload_{user['id']}_{uuid.uuid4().hex}{Path(filename).suffix or '.xlsx'}"
     with excel_path.open("wb") as fh:
         shutil.copyfileobj(camaleom_excel.file, fh)
 
-    # Guarda el perfil de Azure (las credenciales de Camaleom ya no se usan en el server).
-    existing = db.get_profile(user["id"]) or {}
-    db.save_profile(
-        user["id"], azure_org, azure_project, azure_team, azure_full_name,
-        existing.get("camaleom_user") or "", None,
-    )
+    org = azure_org or AZURE_ORG
+    project = azure_project or AZURE_PROJECT
+    team = azure_team or AZURE_TEAM
+    db.save_profile(user["id"], org, project, team, diferenciador or "", (db.get_profile(user["id"]) or {}).get("camaleom_user") or "", None)
 
-    job_id = jobs.start_job(
-        sprints=sprints,
-        fecha_inicio=fecha_inicio,
-        fecha_fin=fecha_fin,
-        camaleom_excel_path=str(excel_path),
-        azure_org=azure_org,
-        azure_project=azure_project,
-        azure_team=azure_team,
-        azure_full_name=azure_full_name,
-    )
-    jobs._set(job_id, user_id=user["id"])
+    params = {
+        "excel_path": str(excel_path),
+        "fecha_final": fecha_final_d,
+        "dias_atras": int(dias_atras),
+        "sprints_txt": sprints,
+        "diferenciador": diferenciador,
+        "azure_org": org,
+        "azure_project": project,
+        "azure_team": team,
+    }
+    job_id = jobs.start_job(user["id"], params)
     return {"job_id": job_id}
 
 
@@ -200,29 +219,67 @@ def run_status(job_id: str, request: Request):
         "error": job.get("error"),
         "attempt": job.get("attempt", 0),
         "max_attempts": job.get("max_attempts", 1),
+        "run_id": job.get("run_id"),
     }
 
 
-@app.get("/api/run/{job_id}/report", response_class=HTMLResponse)
-def run_report(job_id: str, request: Request):
+# ---------- Runs (historial) ----------
+
+@app.get("/api/runs")
+def runs_list(request: Request):
     user = require_user(request)
-    job = jobs.get_job(job_id)
-    if not job or job.get("user_id") != user["id"]:
-        raise HTTPException(status_code=404, detail="Job no encontrado.")
-    if job.get("state") != "ok":
-        raise HTTPException(status_code=409, detail="El reporte aun no esta listo.")
-    return FileResponse(job["html_path"])
+    rows = db.list_runs(user["id"])
+    for r in rows:
+        r["created_at"] = r["created_at"].isoformat() if r.get("created_at") else None
+        r["periodo_inicio"] = r["periodo_inicio"].isoformat() if r.get("periodo_inicio") else None
+        r["periodo_fin"] = r["periodo_fin"].isoformat() if r.get("periodo_fin") else None
+    return {"runs": rows}
 
 
-@app.get("/api/run/{job_id}/excel")
-def run_excel(job_id: str, request: Request):
+@app.get("/api/runs/{run_id}")
+def run_get(run_id: int, request: Request):
     user = require_user(request)
-    job = jobs.get_job(job_id)
-    if not job or job.get("user_id") != user["id"]:
-        raise HTTPException(status_code=404, detail="Job no encontrado.")
-    if job.get("state") != "ok" or not job.get("xlsx_path"):
-        raise HTTPException(status_code=409, detail="El Excel aun no esta listo.")
-    return FileResponse(job["xlsx_path"], filename=Path(job["xlsx_path"]).name)
+    run = db.get_run(user["id"], run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Ejecucion no encontrada.")
+    data = run["data"]
+    data["id"] = run["id"]
+    data["created_at"] = run["created_at"].isoformat() if run.get("created_at") else None
+    return data
+
+
+@app.get("/api/runs/{run_id}/excel")
+def run_excel(run_id: int, request: Request):
+    user = require_user(request)
+    xlsx = db.get_run_xlsx(user["id"], run_id)
+    if not xlsx:
+        raise HTTPException(status_code=404, detail="Excel no disponible.")
+    return Response(
+        content=xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="reporte_{run_id}.xlsx"'},
+    )
+
+
+# ---------- Chatbot Gemini ----------
+
+@app.post("/api/chat")
+async def chat(request: Request):
+    user = require_user(request)
+    body = await request.json()
+    run_id = body.get("run_id")
+    pregunta = (body.get("question") or "").strip()
+    historial = body.get("history") or []
+    if not pregunta:
+        raise HTTPException(status_code=400, detail="Escribe una pregunta.")
+    run = db.get_run(user["id"], int(run_id)) if run_id else None
+    if not run:
+        raise HTTPException(status_code=404, detail="Primero genera o abre un reporte para poder preguntar sobre el.")
+    try:
+        answer = gemini.preguntar(run["data"], pregunta, historial)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return {"answer": answer}
 
 
 @app.get("/health")

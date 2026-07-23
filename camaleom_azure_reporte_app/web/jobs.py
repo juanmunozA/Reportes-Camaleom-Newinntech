@@ -91,10 +91,7 @@ def start_job(
     sprints: str,
     fecha_inicio: str,
     fecha_fin: str,
-    camaleom_fecha_inicio: str,
-    camaleom_fecha_fin: str,
-    camaleom_user: str,
-    camaleom_pass: str,
+    camaleom_excel_path: str,
     azure_org: str,
     azure_project: str,
     azure_team: str,
@@ -105,21 +102,17 @@ def start_job(
 
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
-    env["CAMALEOM_USER"] = camaleom_user
-    env["CAMALEOM_PASS"] = camaleom_pass
     env["AZURE_ORG"] = azure_org
     env["AZURE_PROJECT"] = azure_project
     env["AZURE_TEAM"] = azure_team
     env["AZURE_ASSIGNED_TO_NAME"] = azure_full_name
-    env["HEADLESS"] = "true"
 
     command = [
         sys.executable, "-m", "camaleom_azure_reporte_app",
         "--sprint", sprints,
         "--fecha-inicio", fecha_inicio,
         "--fecha-fin", fecha_fin,
-        "--camaleom-creacion-inicio", camaleom_fecha_inicio,
-        "--camaleom-creacion-fin", camaleom_fecha_fin,
+        "--camaleom-excel", camaleom_excel_path,
         "--sin-browser-azure",
     ]
 

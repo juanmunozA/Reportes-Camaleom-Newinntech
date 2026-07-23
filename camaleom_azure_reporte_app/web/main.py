@@ -3,13 +3,16 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+import shutil
+import uuid
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from ..azure_devops import AzureDevOpsClient
-from ..config import AZURE_DEVOPS_PAT, AZURE_ORG, AZURE_PROJECT, AZURE_TEAM, APP_SECRET_KEY
+from ..config import AZURE_DEVOPS_PAT, AZURE_ORG, AZURE_PROJECT, AZURE_TEAM, APP_SECRET_KEY, DOWNLOAD_DIR
 from . import db, jobs
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -133,42 +136,49 @@ def sprint_range(sprints: str, azure_org: str = "", azure_project: str = "", azu
 
 
 @app.post("/api/run")
-async def run_reporte(request: Request):
+async def run_reporte(
+    request: Request,
+    camaleom_excel: UploadFile = File(...),
+    sprints: str = Form(...),
+    fecha_inicio: str = Form(...),
+    fecha_fin: str = Form(...),
+    azure_org: str = Form(""),
+    azure_project: str = Form(""),
+    azure_team: str = Form(""),
+    azure_full_name: str = Form(""),
+):
     user = require_user(request)
-    body = await request.json()
 
-    sprints = str(body.get("sprints") or "").strip()
-    fecha_inicio = body.get("fecha_inicio") or ""
-    fecha_fin = body.get("fecha_fin") or ""
-    camaleom_fecha_inicio = body.get("camaleom_fecha_inicio") or fecha_inicio
-    camaleom_fecha_fin = body.get("camaleom_fecha_fin") or fecha_fin
-    azure_org = body.get("azure_org") or AZURE_ORG
-    azure_project = body.get("azure_project") or AZURE_PROJECT
-    azure_team = body.get("azure_team") or AZURE_TEAM
-    azure_full_name = body.get("azure_full_name") or ""
-    camaleom_user = body.get("camaleom_user") or ""
-    camaleom_pass = body.get("camaleom_pass") or ""
+    sprints = (sprints or "").strip()
+    azure_org = azure_org or AZURE_ORG
+    azure_project = azure_project or AZURE_PROJECT
+    azure_team = azure_team or AZURE_TEAM
 
-    if not sprints or not fecha_inicio or not fecha_fin or not camaleom_user:
-        raise HTTPException(status_code=400, detail="Faltan campos requeridos (sprint, fechas, usuario Camaleom).")
+    if not sprints or not fecha_inicio or not fecha_fin:
+        raise HTTPException(status_code=400, detail="Faltan campos requeridos (sprint, fechas de analisis).")
 
-    profile = db.get_profile(user["id"])
-    if not camaleom_pass:
-        if not profile or not profile.get("camaleom_pass_enc"):
-            raise HTTPException(status_code=400, detail="No hay contrasena de Camaleom guardada, ingresala.")
-        camaleom_pass = db.decrypt(profile["camaleom_pass_enc"])
-        db.save_profile(user["id"], azure_org, azure_project, azure_team, azure_full_name, camaleom_user, None)
-    else:
-        db.save_profile(user["id"], azure_org, azure_project, azure_team, azure_full_name, camaleom_user, camaleom_pass)
+    filename = camaleom_excel.filename or "camaleom.xlsx"
+    if not filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="El archivo de Camaleom debe ser un Excel (.xlsx o .xls).")
+
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = Path(filename).suffix or ".xlsx"
+    excel_path = DOWNLOAD_DIR / f"upload_{user['id']}_{uuid.uuid4().hex}{suffix}"
+    with excel_path.open("wb") as fh:
+        shutil.copyfileobj(camaleom_excel.file, fh)
+
+    # Guarda el perfil de Azure (las credenciales de Camaleom ya no se usan en el server).
+    existing = db.get_profile(user["id"]) or {}
+    db.save_profile(
+        user["id"], azure_org, azure_project, azure_team, azure_full_name,
+        existing.get("camaleom_user") or "", None,
+    )
 
     job_id = jobs.start_job(
         sprints=sprints,
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
-        camaleom_fecha_inicio=camaleom_fecha_inicio,
-        camaleom_fecha_fin=camaleom_fecha_fin,
-        camaleom_user=camaleom_user,
-        camaleom_pass=camaleom_pass,
+        camaleom_excel_path=str(excel_path),
         azure_org=azure_org,
         azure_project=azure_project,
         azure_team=azure_team,

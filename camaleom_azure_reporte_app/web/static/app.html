@@ -17,29 +17,30 @@
 
 <main class="app-main">
   <div class="section-card">
-    <h2>Perfil Azure / Camaleom</h2>
-    <p class="hint">Se guarda cifrado y se reutiliza en las proximas ejecuciones. La contrasena de Camaleom solo se pide de nuevo si quieres cambiarla.</p>
+    <h2>Perfil Azure</h2>
+    <p class="hint">Se guarda y se reutiliza en las proximas ejecuciones. Azure se consulta con el PAT del servidor (sin MFA).</p>
     <div class="grid-2">
       <div><label>Organizacion Azure</label><input id="azureOrg"></div>
       <div><label>Proyecto Azure</label><input id="azureProject"></div>
       <div><label>Equipo Azure</label><input id="azureTeam"></div>
       <div><label>Nombre completo (asignado a)</label><input id="azureFullName"></div>
-      <div><label>Usuario Camaleom</label><input id="camaleomUser"></div>
-      <div><label>Contrasena Camaleom</label><input type="password" id="camaleomPass" placeholder="dejar en blanco para no cambiar"></div>
     </div>
   </div>
 
   <div class="section-card">
     <h2>Ejecucion</h2>
-    <p class="hint">Indica el o los sprints de Azure a filtrar y el rango de fechas del reporte de Camaleom.</p>
+    <p class="hint">Indica el o los sprints de Azure, el rango de fechas del analisis, y sube el Excel de Camaleom (Reportes &gt; Mis Actividades &gt; Exportar).</p>
     <label>Sprint(s), separados por coma</label>
     <input id="sprints" placeholder="279" value="279">
     <button class="link" id="detectBtn" type="button">Detectar fecha fin del sprint en Azure</button>
     <div class="grid-2">
       <div><label>Fecha inicio (analisis)</label><input type="date" id="fechaInicio"></div>
       <div><label>Fecha fin (analisis)</label><input type="date" id="fechaFin"></div>
-      <div><label>Camaleom: fecha desde</label><input type="date" id="camFechaInicio"></div>
-      <div><label>Camaleom: fecha hasta</label><input type="date" id="camFechaFin"></div>
+    </div>
+    <label>Excel de Camaleom (.xlsx)</label>
+    <div class="file-drop" id="fileDrop">
+      <input type="file" id="camaleomExcel" accept=".xlsx,.xls" hidden>
+      <span id="fileLabel">Haz clic para seleccionar el Excel de tus actividades de Camaleom</span>
     </div>
     <button class="primary" id="runBtn">Generar reporte</button>
     <div class="error-msg" id="errorMsg"></div>
@@ -58,7 +59,7 @@
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
   <div class="attempt-pill" id="attemptPill">Intento 1</div>
-  <p id="loadingText">Cargando datos de Camaleom y Azure. Esto puede tardar unos minutos, no cierres esta pagina...</p>
+  <p id="loadingText">Procesando el Excel de Camaleom y consultando Azure. Esto puede tardar un poco, no cierres esta pagina...</p>
   <div class="log-line" id="loadingLine"></div>
 </div>
 
@@ -76,13 +77,20 @@ async function loadMe() {
   document.getElementById("azureProject").value = p.azure_project || "";
   document.getElementById("azureTeam").value = p.azure_team || "";
   document.getElementById("azureFullName").value = p.azure_full_name || "";
-  document.getElementById("camaleomUser").value = p.camaleom_user || "";
-  document.getElementById("camaleomPass").placeholder = p.camaleom_pass_saved ? "guardada (dejar en blanco para no cambiar)" : "";
 }
 
 document.getElementById("logoutBtn").addEventListener("click", async () => {
   await fetch("/api/logout", { method: "POST" });
   window.location.href = "/";
+});
+
+const fileInput = document.getElementById("camaleomExcel");
+const fileDrop = document.getElementById("fileDrop");
+const fileLabel = document.getElementById("fileLabel");
+fileDrop.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  fileLabel.textContent = fileInput.files.length ? "📄 " + fileInput.files[0].name : "Haz clic para seleccionar el Excel de tus actividades de Camaleom";
+  fileDrop.classList.toggle("has-file", fileInput.files.length > 0);
 });
 
 document.getElementById("detectBtn").addEventListener("click", async () => {
@@ -113,29 +121,31 @@ function showError(msg) {
 
 document.getElementById("runBtn").addEventListener("click", async () => {
   document.getElementById("errorMsg").classList.remove("show");
-  const body = {
-    sprints: document.getElementById("sprints").value.trim(),
-    fecha_inicio: document.getElementById("fechaInicio").value,
-    fecha_fin: document.getElementById("fechaFin").value,
-    camaleom_fecha_inicio: document.getElementById("camFechaInicio").value,
-    camaleom_fecha_fin: document.getElementById("camFechaFin").value,
-    azure_org: document.getElementById("azureOrg").value,
-    azure_project: document.getElementById("azureProject").value,
-    azure_team: document.getElementById("azureTeam").value,
-    azure_full_name: document.getElementById("azureFullName").value,
-    camaleom_user: document.getElementById("camaleomUser").value,
-    camaleom_pass: document.getElementById("camaleomPass").value,
-  };
-  if (!body.sprints || !body.fecha_inicio || !body.fecha_fin || !body.camaleom_user) {
-    showError("Completa sprint(s), fechas de analisis y usuario Camaleom.");
+  const sprints = document.getElementById("sprints").value.trim();
+  const fechaInicio = document.getElementById("fechaInicio").value;
+  const fechaFin = document.getElementById("fechaFin").value;
+
+  if (!sprints || !fechaInicio || !fechaFin) {
+    showError("Completa sprint(s) y las fechas de analisis.");
     return;
   }
+  if (!fileInput.files.length) {
+    showError("Sube el Excel de Camaleom (Reportes > Mis Actividades > Exportar).");
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append("sprints", sprints);
+  fd.append("fecha_inicio", fechaInicio);
+  fd.append("fecha_fin", fechaFin);
+  fd.append("azure_org", document.getElementById("azureOrg").value);
+  fd.append("azure_project", document.getElementById("azureProject").value);
+  fd.append("azure_team", document.getElementById("azureTeam").value);
+  fd.append("azure_full_name", document.getElementById("azureFullName").value);
+  fd.append("camaleom_excel", fileInput.files[0]);
+
   try {
-    const resp = await fetch("/api/run", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const resp = await fetch("/api/run", { method: "POST", body: fd });
     if (!resp.ok) {
       const data = await resp.json().catch(() => ({}));
       throw new Error(data.detail || "No pude iniciar el reporte.");
@@ -171,7 +181,7 @@ function pollStatus() {
       document.getElementById("loadingText").textContent = "Un intento fallo, reintentando automaticamente...";
       pollStatus();
     } else {
-      document.getElementById("loadingText").textContent = "Cargando datos de Camaleom y Azure. Esto puede tardar unos minutos, no cierres esta pagina...";
+      document.getElementById("loadingText").textContent = "Procesando el Excel de Camaleom y consultando Azure. Esto puede tardar un poco, no cierres esta pagina...";
       pollStatus();
     }
   }, 2000);

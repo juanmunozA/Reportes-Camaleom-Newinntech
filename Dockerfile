@@ -4,19 +4,6 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     HEADLESS=true
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    chromium \
-    chromium-driver \
-    fonts-liberation \
-    libnss3 \
-    libatk-bridge2.0-0 \
-    libgtk-3-0 \
-    libasound2 \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV CHROME_BIN=/usr/bin/chromium \
-    CHROMEDRIVER_PATH=/usr/bin/chromedriver
-
 WORKDIR /app
 
 COPY requirements.txt .

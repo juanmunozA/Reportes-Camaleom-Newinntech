@@ -139,23 +139,44 @@ function renderGlossary() {
 const QUICK = [["horas","Horas por día"],["azure","Items de Azure"],["grafico","Gráfico"],["reportadas","Tasks reportadas"],["sinreportar","Tasks sin reportar"],["camaleom","Camaleom sin coincidencia"],["revision","Revisión manual"]];
 document.getElementById("quickLinks").innerHTML = QUICK.map(([v,l])=>`<button onclick="showView('${v}')">${l}</button>`).join("");
 
+const FILTER_COLS = ["Sprint","Tipo","Estado","Estado Azure","Estado reporte"];
+const escA = s => String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+const COL_ORDER = ["AzureID","Sprint","Tipo","Estado","Estado Azure","Estado reporte","HU","Titulo","Titulo Azure","Descripcion Camaleom","Original Estimate","Original Estimate Azure","Completed Work","Completed Work Azure","Horas Camaleom","Diferencia Camaleom vs Completed","Remaining Work","Veces reportada","Fechas reales","Reportes Camaleom","Match Score","Match Tipo","Tags","FechaRealPruebasUnitarias","Horas reportadas","Debe tener","Diferencia"];
 function tableHTML(rows) {
   if (!rows || !rows.length) return '<div class="table-wrap"><div class="empty">Sin datos para esta vista.</div></div>';
-  const cols = Object.keys(rows[0]);
-  const head = cols.map(c=>`<th>${c}</th>`).join("");
-  const body = rows.map(row => "<tr>" + cols.map(c => {
-    const raw = String(row[c] ?? ""); const num = /^-?\d+(\.\d+)?$/.test(raw);
-    let inner = raw.replace(/</g,"&lt;");
-    if (c === "Estado reporte") {
-      const cl = raw==="Reportada"?"ok":(raw==="Falta reportar"?"bad":(raw==="Solo Camaleom"?"warn":"muted"));
-      inner = `<span class="pill ${cl}">${raw}</span>`;
-    }
-    const title = raw.replace(/"/g,"&quot;");
-    return `<td class="${num?'num':''}"><div class="cell" title="${title}">${inner}</div></td>`;
-  }).join("") + "</tr>").join("");
-  return `<input class="search" placeholder="Buscar en esta tabla…" oninput="filterTable(this)"><div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  const cols = Object.keys(rows[0]).sort((a,b)=>{ const ia=COL_ORDER.indexOf(a), ib=COL_ORDER.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
+  const fcols = FILTER_COLS.filter(c => cols.includes(c) && new Set(rows.map(r=>String(r[c]??"")).filter(Boolean)).size > 1);
+  const filterHTML = fcols.map(c => {
+    const vals = [...new Set(rows.map(r=>String(r[c]??"")).filter(Boolean))].sort();
+    return `<select class="tfilter" data-col="${escA(c)}" onchange="applyFilters(this)"><option value="">${escA(c)}: todos</option>${vals.map(v=>`<option value="${escA(v)}">${escA(v)}</option>`).join("")}</select>`;
+  }).join("");
+  const head = cols.map(c=>`<th>${escA(c)}</th>`).join("");
+  const body = rows.map(row => {
+    const key = fcols.map(c=>`|${c}::${String(row[c]??"")}|`).join("").toLowerCase();
+    const cells = cols.map(c => {
+      const raw = String(row[c] ?? ""); const num = /^-?\d+(\.\d+)?$/.test(raw);
+      let inner = escA(raw);
+      if (c === "Estado reporte") {
+        const cl = raw==="Reportada"?"ok":(raw==="Falta reportar"?"bad":(raw==="Solo Camaleom"?"warn":"muted"));
+        inner = `<span class="pill ${cl}">${escA(raw)}</span>`;
+      }
+      return `<td class="${num?'num':''}"><div class="cell" title="${escA(raw)}">${inner}</div></td>`;
+    }).join("");
+    return `<tr data-fltr="${escA(key)}">${cells}</tr>`;
+  }).join("");
+  return `<div class="tbar"><input class="search" placeholder="Buscar…" oninput="applyFilters(this)">${filterHTML}</div><div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
-function filterTable(inp){ const q=inp.value.toLowerCase(); inp.parentElement.querySelectorAll("tbody tr").forEach(tr=>{tr.style.display=tr.innerText.toLowerCase().includes(q)?"":"none";}); }
+function applyFilters(el) {
+  const cont = el.closest("section.view");
+  const search = (cont.querySelector(".search")?.value || "").trim().toLowerCase();
+  const wanted = [...cont.querySelectorAll(".tfilter")].filter(s=>s.value).map(s=>`|${s.dataset.col}::${s.value}|`.toLowerCase());
+  cont.querySelectorAll("tbody tr").forEach(tr => {
+    const fl = tr.getAttribute("data-fltr") || "";
+    const okF = wanted.every(w => fl.includes(w));
+    const okS = !search || tr.innerText.toLowerCase().includes(search);
+    tr.style.display = (okF && okS) ? "" : "none";
+  });
+}
 
 function renderTables() {
   const t = DATA.tables || {};

@@ -209,6 +209,11 @@ def _build_xlsx(azure_df, comparativo, resumen_dia, total_por_descripcion) -> by
     return buffer.getvalue()
 
 
+def _sprint_name(path: Any) -> str:
+    m = re.search(r"Sprint\s*\d+", str(path or ""))
+    return m.group(0) if m else ""
+
+
 def sprint_bounds(cliente: AzureDevOpsClient, sprint: int) -> tuple[date | None, date | None]:
     it = cliente.buscar_iteracion_sprint(sprint)
     attrs = it.get("attributes") or {}
@@ -284,16 +289,21 @@ def ejecutar(
         df_sprint, _ = cliente.descargar_sprint(sprint, solo_mias=False, assigned_to_name=diff)
         dfs.append(df_sprint)
     azure_df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+    id2sprint = {}
     if not azure_df.empty:
         azure_df = azure_df.drop_duplicates(subset=["AzureID"]).reset_index(drop=True)
+        azure_df["Sprint"] = azure_df["IterationPath"].apply(_sprint_name)
+        id2sprint = dict(zip(azure_df["AzureID"].astype(str), azure_df["Sprint"]))
 
     log("Cruzando Azure vs Camaleom...")
     comparativo, resumen_hu = cruzar_azure_camaleom(azure_df, total_por_descripcion)
+    if comparativo is not None and not comparativo.empty:
+        comparativo["Sprint"] = comparativo["AzureID"].astype(str).map(id2sprint).fillna("")
 
     metrics = compute(azure_df, comparativo, resumen_dia, total_por_descripcion)
 
     solo_tasks = comparativo[comparativo["Tipo"].apply(es_task_azure)] if not comparativo.empty else comparativo
-    tareas_cols = ["AzureID", "HU", "Titulo Azure", "Estado Azure", "Original Estimate Azure",
+    tareas_cols = ["AzureID", "Sprint", "HU", "Titulo Azure", "Estado Azure", "Original Estimate Azure",
                    "Completed Work Azure", "Horas Camaleom", "Diferencia Camaleom vs Completed",
                    "Match Score", "Veces reportada", "Fechas reales", "Estado reporte"]
 
@@ -306,7 +316,7 @@ def ejecutar(
     else:
         rev = comparativo
 
-    azure_cols = ["AzureID", "Tipo", "Titulo", "Estado", "Original Estimate", "Remaining Work", "Completed Work", "Tags", "HU"]
+    azure_cols = ["AzureID", "Sprint", "Tipo", "Estado", "Titulo", "HU", "Original Estimate", "Remaining Work", "Completed Work", "Tags"]
 
     grafico = []
     if resumen_dia is not None and not resumen_dia.empty:

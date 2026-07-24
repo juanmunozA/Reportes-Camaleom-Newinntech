@@ -273,6 +273,7 @@ def run_get(run_id: int, request: Request):
     run = db.get_run(user["id"], run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Ejecucion no encontrada.")
+    factory.corregir_festivos(run["data"])
     data = factory.apply(run["data"], db.get_factory(user["id"]))
     data["id"] = run["id"]
     data["created_at"] = run["created_at"].isoformat() if run.get("created_at") else None
@@ -321,6 +322,7 @@ async def chat(request: Request):
     run = db.get_run(user["id"], int(run_id)) if run_id else None
     if not run:
         raise HTTPException(status_code=404, detail="Primero genera o abre un reporte para poder preguntar sobre el.")
+    factory.corregir_festivos(run["data"])
     run_data = factory.apply(run["data"], db.get_factory(user["id"]))
     try:
         answer = gemini.preguntar(run_data, pregunta, historial)

@@ -1,8 +1,51 @@
 from __future__ import annotations
 
 import copy
+import datetime
 import re
 from typing import Any
+
+
+def corregir_festivos(data: dict[str, Any]) -> dict[str, Any]:
+    """Marca los festivos de Colombia en 'Horas por dia' (Debe tener=0) al ver el reporte.
+
+    Repara reportes viejos generados con una lista de festivos incompleta, sin re-generarlos.
+    """
+    tables = data.get("tables", {})
+    hd = tables.get("horas_dia") or []
+    if not hd:
+        return data
+    years = set()
+    for r in hd:
+        try:
+            years.add(datetime.date.fromisoformat(str(r.get("FechaRealPruebasUnitarias", ""))[:10]).year)
+        except Exception:
+            pass
+    if not years:
+        return data
+    try:
+        import holidays
+        fest = set(holidays.country_holidays("CO", years=list(years)).keys())
+    except Exception:
+        return data
+
+    quitado = 0.0
+    for r in hd:
+        try:
+            f = datetime.date.fromisoformat(str(r.get("FechaRealPruebasUnitarias", ""))[:10])
+        except Exception:
+            continue
+        if f in fest and _num(r.get("Debe tener")) > 0:
+            quitado += _num(r.get("Debe tener"))
+            rep = _num(r.get("Horas reportadas"))
+            r["Debe tener"] = 0.0
+            r["Diferencia"] = round(rep, 2)
+            r["Estado"] = "Festivo"
+    if quitado > 0:
+        m = data.get("metrics", {})
+        m["total_esperado"] = round(_num(m.get("total_esperado")) - quitado, 1)
+        m["balance"] = round(_num(m.get("total_reportado")) - _num(m.get("total_esperado")), 1)
+    return data
 
 
 def hu_id(hu: Any) -> str:

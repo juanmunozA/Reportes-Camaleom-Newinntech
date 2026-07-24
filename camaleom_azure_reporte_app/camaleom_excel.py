@@ -138,16 +138,18 @@ def construir_resumen_camaleom(df: pd.DataFrame, meta: dict[str, str | None], fe
     fechas = list(pd.date_range(fecha_inicio, fecha_fin).date)
     if not incluir_fines_semana:
         fechas = [f for f in fechas if f.weekday() < 5]
-    fechas = [f for f in fechas if f not in festivos]  # excluye festivos de Colombia
+    # Los festivos de Colombia se conservan pero con "Debe tener" 0 (no cuentan como esperadas).
     fechas_periodo = pd.DataFrame({"FechaRealPruebasUnitarias": fechas})
 
     resumen_dia = fechas_periodo.merge(resumen_dia, how="left", on="FechaRealPruebasUnitarias")
     resumen_dia["Horas reportadas"] = resumen_dia["Horas reportadas"].fillna(0)
-    resumen_dia["Debe tener"] = horas_dia
+    es_festivo = resumen_dia["FechaRealPruebasUnitarias"].apply(lambda f: f in festivos)
+    resumen_dia["Debe tener"] = es_festivo.apply(lambda x: 0.0 if x else horas_dia)
     resumen_dia["Diferencia"] = resumen_dia["Horas reportadas"] - resumen_dia["Debe tener"]
-    resumen_dia["Estado"] = resumen_dia["Diferencia"].apply(
-        lambda x: "OK" if abs(x) < 0.01 else (f"Falta {abs(x):.1f}" if x < 0 else f"Sobra {x:.1f}")
-    )
+    resumen_dia["Estado"] = [
+        "Festivo" if fest else ("OK" if abs(d) < 0.01 else (f"Falta {abs(d):.1f}" if d < 0 else f"Sobra {d:.1f}"))
+        for fest, d in zip(es_festivo, resumen_dia["Diferencia"])
+    ]
 
     detalle_por_descripcion = (
         df.groupby(["DescripcionLimpia", col_fecha], dropna=False)

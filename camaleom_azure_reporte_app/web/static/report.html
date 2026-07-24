@@ -17,6 +17,7 @@
     <div class="nav-item" data-view="horas" title="Horas por día"><span class="ic" data-ic="clock"></span> <span class="lbl">Horas por día</span></div>
     <div class="nav-item" data-view="azure" title="Items de Azure"><span class="ic" data-ic="box"></span> <span class="lbl">Items de Azure</span></div>
     <div class="nav-item" data-view="grafico" title="Gráfico"><span class="ic" data-ic="chart"></span> <span class="lbl">Gráfico</span></div>
+    <div class="nav-item" data-view="mapa" title="Mapa neuronal"><span class="ic" data-ic="brain"></span> <span class="lbl">Mapa neuronal</span></div>
     <div class="nav-item" data-view="reportadas" title="Tasks reportadas"><span class="ic" data-ic="check"></span> <span class="lbl">Tasks reportadas</span></div>
     <div class="nav-item" data-view="sinreportar" title="Tasks sin reportar"><span class="ic" data-ic="alert"></span> <span class="lbl">Tasks sin reportar</span></div>
     <div class="nav-item" data-view="camaleom" title="Camaleom sin coincidencia"><span class="ic" data-ic="search"></span> <span class="lbl">Camaleom sin coincidencia</span></div>
@@ -47,10 +48,24 @@
     <section class="view" id="view-horas"><div id="tbl-horas"></div></section>
     <section class="view" id="view-azure"><div id="tbl-azure"></div></section>
     <section class="view" id="view-grafico">
+      <div class="chart-summary" id="chartSummary"></div>
       <div class="section-card">
-        <h2>Horas reportadas vs esperadas por día</h2>
-        <div class="legend"><span><span class="sw" style="background:linear-gradient(135deg,#8b5cf6,#22d3ee)"></span>Reportadas</span><span><span class="sw" style="background:rgba(255,255,255,.14)"></span>Esperadas</span></div>
-        <div class="bars" id="bars"></div>
+        <div class="chart-head">
+          <h2>Horas reportadas vs esperadas por día</h2>
+          <div class="chart-legend"><span><i class="sw grad"></i>Reportadas</span><span><i class="sw esp"></i>Esperadas</span><span><i class="dot ok"></i>Día cumplido</span><span><i class="dot bad"></i>Día incompleto</span></div>
+        </div>
+        <div class="barchart" id="barchart"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-mapa">
+      <div class="section-card">
+        <div class="chart-head">
+          <h2>Mapa neuronal de HUs y tasks</h2>
+          <div class="chart-legend"><span><i class="dot ok"></i>Completa</span><span><i class="dot warn"></i>Parcial</span><span><i class="dot bad"></i>Sin reportar</span><span style="color:var(--muted)">Tamaño = horas · pasa el mouse</span></div>
+        </div>
+        <div id="neuralMap"></div>
+        <div class="map-tip" id="mapTip"></div>
       </div>
     </section>
     <section class="view" id="view-reportadas"><div id="tbl-reportadas"></div></section>
@@ -132,7 +147,7 @@ async function load() {
   DATA = await r.json();
   const meta = DATA.meta || {};
   document.getElementById("metaLine").textContent = `Período ${meta.periodo_inicio} → ${meta.periodo_fin} · Persona: ${meta.persona} · Sprints: ${(meta.sprints||[]).join(", ")}`;
-  renderKPIs(); renderGlossary(); renderTables(); renderChart(); renderHU();
+  renderKPIs(); renderGlossary(); renderTables(); renderChart(); renderMap(); renderHU();
   document.getElementById("dlExcel").onclick = () => location.href = `/api/runs/${RUN_ID}/excel`;
 }
 
@@ -237,22 +252,108 @@ function renderTables() {
   document.getElementById("tbl-revision").innerHTML = tableHTML(t.revision_manual);
 }
 
+const DIAS = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+let _tip;
+function showTip(e, el) {
+  if (!_tip) { _tip = document.createElement("div"); _tip.className = "floating-tip"; document.body.appendChild(_tip); }
+  _tip.textContent = el.dataset.tip || "";
+  _tip.style.display = "block";
+  _tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 270) + "px";
+  _tip.style.top = Math.min(e.clientY + 14, window.innerHeight - 80) + "px";
+}
+function hideTip() { if (_tip) _tip.style.display = "none"; }
+
 function renderChart() {
   const g = DATA.grafico || [];
-  if (!g.length) { document.getElementById("bars").innerHTML = '<div class="empty">Sin datos.</div>'; return; }
-  const max = Math.max(1, ...g.map(d=>Math.max(d.reportadas, d.esperadas)));
-  document.getElementById("bars").innerHTML = g.map(d => {
-    const hr = Math.round(180 * d.reportadas / max), he = Math.round(180 * d.esperadas / max);
-    const dd = (d.fecha||"").slice(5);
-    return `<div class="bar-col"><div class="bar-stack"><div class="bar rep" style="height:${hr}px" title="Reportadas: ${d.reportadas}h"></div><div class="bar esp" style="height:${he}px" title="Esperadas: ${d.esperadas}h"></div></div><div class="bar-lbl">${dd}</div></div>`;
+  const host = document.getElementById("barchart");
+  const sum = document.getElementById("chartSummary");
+  if (!g.length) { host.innerHTML = '<div class="empty">Sin datos para graficar.</div>'; sum.innerHTML = ""; return; }
+  const totalRep = g.reduce((a,d)=>a+ (+d.reportadas||0), 0);
+  const totalEsp = g.reduce((a,d)=>a+ (+d.esperadas||0), 0);
+  const diasLab = g.filter(d=>d.esperadas>0).length;
+  const cumplidos = g.filter(d=>d.esperadas>0 && d.reportadas>=d.esperadas-0.01).length;
+  const prom = diasLab ? totalRep/diasLab : 0;
+  const pct = totalEsp ? Math.round(100*totalRep/totalEsp) : 0;
+  sum.innerHTML = [
+    ["Total reportado", totalRep.toFixed(1)+"h", "cyan"],
+    ["Total esperado", totalEsp.toFixed(1)+"h", "info"],
+    ["Promedio / día", prom.toFixed(1)+"h", "purple"],
+    ["Días cumplidos", cumplidos+" / "+diasLab, cumplidos>=diasLab?"ok":"warn"],
+    ["% cumplimiento", pct+"%", pct>=100?"ok":pct>=70?"warn":"bad"],
+  ].map(([l,v,c])=>`<div class="cs-item ${c}"><span>${l}</span><b>${v}</b></div>`).join("");
+
+  const top = Math.max(2, Math.ceil(Math.max(8, ...g.map(d=>Math.max(d.reportadas,d.esperadas)))/2)*2);
+  const ticks = []; for (let t=top;t>=0;t-=2) ticks.push(t);
+  const yaxis = ticks.map(t=>`<span>${t}</span>`).join("");
+  const grid = ticks.map(t=>`<div class="gridline" style="bottom:${100*t/top}%"></div>`).join("");
+  const cols = g.map(d => {
+    const hr = 100*(+d.reportadas||0)/top, he = 100*(+d.esperadas||0)/top;
+    const dt = new Date(d.fecha+"T00:00:00"); const wd = DIAS[dt.getDay()]||""; const dd=(d.fecha||"").slice(5);
+    const ok = d.esperadas>0 && d.reportadas>=d.esperadas-0.01;
+    const falta = Math.max(0, (d.esperadas-d.reportadas)).toFixed(1);
+    const tip = `${wd} ${dd}  ·  Reportadas: ${d.reportadas}h  ·  Esperadas: ${d.esperadas}h  ·  ${ok?"Cumplido ✓":"Falta "+falta+"h"}`;
+    return `<div class="day-col" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()">
+      <div class="bar-pair">
+        <div class="bar rep" style="height:${hr}%"><span class="bar-val" style="color:${ok?'var(--text)':'var(--bad)'}">${d.reportadas||""}</span></div>
+        <div class="bar esp" style="height:${he}%"></div>
+      </div>
+      <div class="day-lbl"><b>${wd}</b>${dd}</div>
+    </div>`;
   }).join("");
+  host.innerHTML = `<div class="y-axis">${yaxis}</div><div class="plot"><div class="gridlines">${grid}</div><div class="bars-row">${cols}</div></div>`;
+}
+
+function renderMap() {
+  const host = document.getElementById("neuralMap");
+  const hus = (DATA.hu_list || []).filter(h=> (h.tasks||0) > 0);
+  const cruce = (DATA.tables && DATA.tables.cruce) || [];
+  if (!hus.length) { host.innerHTML = '<div class="empty">Sin HUs para mapear.</div>'; return; }
+  const repByHu = {}, tasksByHu = {};
+  cruce.forEach(t => {
+    const m = String(t.HU||"").match(/^\s*(\d+)/); if (!m) return; const id = m[1];
+    repByHu[id] = (repByHu[id]||0) + (parseFloat(t["Horas Camaleom"])||0);
+    (tasksByHu[id] = tasksByHu[id]||[]).push(t);
+  });
+  const W=920, H=580, cx=W/2, cy=H/2, R1=Math.min(W,H)/2-150, n=hus.length;
+  const maxEst = Math.max(1, ...hus.map(h=>h.estimadas||0));
+  const nodes = hus.map((h,i) => {
+    const ang = (-Math.PI/2) + (2*Math.PI*i/n);
+    const est = h.estimadas||0, rep = repByHu[h.id]||0;
+    const r = 11 + 17*Math.sqrt(est/maxEst);
+    const cov = est>0 ? rep/est : (rep>0?1:0);
+    const color = cov>=0.999 ? "#34d399" : cov>0 ? "#fbbf24" : "#fb7185";
+    return { h, x: cx+R1*Math.cos(ang), y: cy+R1*Math.sin(ang), r, est, rep, cov, color, ang };
+  });
+  let s = `<svg viewBox="0 0 ${W} ${H}" class="neural-svg" preserveAspectRatio="xMidYMid meet"><defs>
+    <radialGradient id="coreG"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#8b5cf6"/></radialGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+  nodes.forEach(nd => { const w = 1.5 + 4*Math.sqrt(nd.est/maxEst);
+    s += `<line x1="${cx}" y1="${cy}" x2="${nd.x.toFixed(1)}" y2="${nd.y.toFixed(1)}" stroke="${nd.color}" stroke-width="${w.toFixed(1)}" stroke-opacity=".3" class="synapse"/>`; });
+  nodes.forEach(nd => { const ts=(tasksByHu[nd.h.id]||[]).slice(0,7); const m=ts.length;
+    ts.forEach((t,j) => { const a=nd.ang + (-0.55 + (m>1? j/(m-1):0.5)*1.1); const rr=nd.r+30;
+      const tx=nd.x+rr*Math.cos(a), ty=nd.y+rr*Math.sin(a);
+      const done = ["Reportada","Excedida"].includes(String(t["Estado reporte"]));
+      const tip = `Task ${t.AzureID} · ${t["Horas Camaleom"]||0}h · ${t["Estado reporte"]||""}`;
+      s += `<line x1="${nd.x.toFixed(1)}" y1="${nd.y.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${nd.color}" stroke-width="1" stroke-opacity=".22" class="synapse"/>`;
+      s += `<circle cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="4.5" fill="${done?"#34d399":"#fb7185"}" class="neuron-sm" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
+    });
+  });
+  nodes.forEach(nd => {
+    const cov = nd.est>0 ? Math.round(100*nd.rep/nd.est) : 0;
+    const tip = `${nd.h.hu}  ·  ${nd.h.tasks} task(s)  ·  estimadas ${nd.est}h  ·  reportadas ${nd.rep.toFixed(1)}h  ·  ${cov}%`;
+    s += `<circle cx="${nd.x.toFixed(1)}" cy="${nd.y.toFixed(1)}" r="${nd.r.toFixed(1)}" fill="${nd.color}" fill-opacity=".85" filter="url(#glow)" class="neuron" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
+    s += `<text x="${nd.x.toFixed(1)}" y="${(nd.y+nd.r+13).toFixed(1)}" text-anchor="middle" class="neuron-lbl">${escA(nd.h.id)}</text>`;
+  });
+  s += `<circle cx="${cx}" cy="${cy}" r="30" fill="url(#coreG)" filter="url(#glow)" class="core"/>`;
+  s += `<text x="${cx}" y="${cy+4}" text-anchor="middle" class="core-lbl">${escA((DATA.meta&&DATA.meta.persona)||"Tú")}</text></svg>`;
+  host.innerHTML = s;
 }
 
 function showView(v) {
   document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.classList.toggle("active", n.dataset.view===v));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
   document.getElementById("view-"+v).classList.add("active");
-  const titles = {resumen:"Resumen",horas:"Horas por día",azure:"Items de Azure",grafico:"Gráfico",reportadas:"Tasks reportadas",sinreportar:"Tasks sin reportar",camaleom:"Camaleom sin coincidencia",revision:"Revisión manual",fabricas:"HU / Fábricas"};
+  const titles = {resumen:"Resumen",horas:"Horas por día",azure:"Items de Azure",grafico:"Gráfico",mapa:"Mapa neuronal",reportadas:"Tasks reportadas",sinreportar:"Tasks sin reportar",camaleom:"Camaleom sin coincidencia",revision:"Revisión manual",fabricas:"HU / Fábricas"};
   document.getElementById("pageTitle").textContent = titles[v] || "Reporte";
   document.getElementById("sidebar").classList.remove("open");
 }

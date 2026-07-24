@@ -40,9 +40,10 @@ def login_camaleom(driver: webdriver.Chrome, user: str | None = None, password: 
             valor_password = password_el.get_attribute("value") or ""
         except StaleElementReferenceException:
             valor_password = password
+        espera_manual = 15 if HEADLESS else 120
         if len(valor_password) < len(password):
-            print("No pude escribir la contraseña automáticamente. Escríbela en el navegador y pulsa Siguiente. Continúo apenas detecte el home...")
-            esperar_salida_login(driver, segundos=120)
+            print("No pude escribir la contraseña automáticamente.")
+            esperar_salida_login(driver, segundos=espera_manual)
             return
         if not click_boton_login_fisico(driver, TEXTOS_CAMALEOM["siguiente"], segundos=1.0):
             click_boton_login(driver, TEXTOS_CAMALEOM["siguiente"], segundos=0.8)
@@ -51,15 +52,16 @@ def login_camaleom(driver: webdriver.Chrome, user: str | None = None, password: 
                 password_el.send_keys(Keys.ENTER)
             except StaleElementReferenceException:
                 driver.switch_to.active_element.send_keys(Keys.ENTER)
-            esperar_salida_login(driver, segundos=120)
+            esperar_salida_login(driver, segundos=espera_manual)
     except TimeoutException:
         pass
 
     click_css_si_existe(driver, ["#idBtn_Back", "#idSIButton9"], segundos=1.2)
 
     if any(x in driver.current_url.lower() for x in ["microsoftonline", "login", "signin"]):
-        print("Si aparece MFA/Authenticator para Camaleom, apruÃ©balo. Espero hasta 90 segundos...")
-        time.sleep(90)
+        espera_mfa = 12 if HEADLESS else 90
+        print(f"Pagina de login/MFA detectada. Esperando {espera_mfa}s por si la sesion avanza...")
+        time.sleep(espera_mfa)
 
 def esperar_descarga(antes: set[Path], timeout: int = 120) -> Path:
     limite = time.time() + timeout

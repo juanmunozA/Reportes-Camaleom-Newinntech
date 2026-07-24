@@ -162,13 +162,18 @@ def sprint_range(sprints: str, azure_org: str = "", azure_project: str = "", azu
     nums = [int(s.strip()) for s in sprints.split(",") if s.strip()]
     if not nums:
         raise HTTPException(status_code=400, detail="Indica al menos un sprint.")
-    finishes = []
+    starts, finishes = [], []
     for numero in nums:
         it = cliente.buscar_iteracion_sprint(numero)
         attrs = it.get("attributes") or {}
+        if attrs.get("startDate"):
+            starts.append(datetime.fromisoformat(attrs["startDate"].replace("Z", "+00:00")).date())
         if attrs.get("finishDate"):
             finishes.append(datetime.fromisoformat(attrs["finishDate"].replace("Z", "+00:00")).date())
-    return {"fecha_fin": max(finishes).isoformat() if finishes else None}
+    return {
+        "fecha_inicio": min(starts).isoformat() if starts else None,
+        "fecha_fin": max(finishes).isoformat() if finishes else None,
+    }
 
 
 # ---------- Ejecucion ----------
@@ -179,7 +184,6 @@ async def run_reporte(
     camaleom_excel: UploadFile | None = File(None),
     source: str = Form("xlsx"),
     fecha_final: str = Form(...),
-    dias_atras: int = Form(21),
     sprints: str = Form(""),
     diferenciador: str = Form(""),
     azure_org: str = Form(""),
@@ -224,7 +228,6 @@ async def run_reporte(
         "camaleom_user": camaleom_user,
         "camaleom_pass": camaleom_pass,
         "fecha_final": fecha_final_d,
-        "dias_atras": int(dias_atras),
         "sprints_txt": sprints,
         "diferenciador": diferenciador,
         "azure_org": org,

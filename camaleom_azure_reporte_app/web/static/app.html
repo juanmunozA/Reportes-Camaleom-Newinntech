@@ -13,7 +13,7 @@
     <div class="nav-item active" data-view="inicio"><span class="ic" data-ic="home"></span> Inicio</div>
     <div class="nav-item" data-view="nueva"><span class="ic" data-ic="plus"></span> Nueva ejecución</div>
     <div class="nav-item" data-view="ejecuciones"><span class="ic" data-ic="list"></span> Mis ejecuciones</div>
-    <div class="nav-item" data-view="perfil"><span class="ic" data-ic="user"></span> Perfil</div>
+    <div class="nav-item" data-view="perfil"><span class="ic" data-ic="user"></span> Credenciales</div>
     <div class="nav-spacer"></div>
     <div class="nav-sep"></div>
     <div class="nav-item" id="logoutBtn"><span class="ic" data-ic="logout"></span> Cerrar sesión</div>
@@ -44,7 +44,7 @@
 
     <!-- NUEVA EJECUCION -->
     <section class="view" id="view-nueva">
-      <div class="page-head"><h1><span class="accent-bar"></span>Nueva ejecución</h1><p>Configura el período y las fuentes que se usarán para generar el análisis.</p></div>
+      <div class="page-head"><h1><span class="accent-bar"></span>Nueva ejecución</h1><p>Configura el sprint y la fecha final para generar el análisis.</p></div>
 
       <div class="section-card">
         <h2>Resumen de configuración</h2>
@@ -70,28 +70,26 @@
             </div>
           </div>
           <div id="camBlock" style="display:none">
-            <p class="hint">Intentará iniciar sesión en Camaleom con las credenciales guardadas en tu Perfil. Si tu cuenta pide MFA, no se podrá en el servidor; usa Archivo XLSX.</p>
             <div class="note" id="camCredNote"></div>
           </div>
+        </div>
+
+        <div class="section-card">
+          <h2>2. Sprint y fecha</h2>
+          <label>Sprint(s) — separados por coma</label>
+          <input id="sprints" placeholder="280 o 279,280">
+          <label>Fecha final (último día a incluir)</label>
+          <input type="date" id="fechaFinal">
+          <p class="hint" style="margin-top:10px">El período va desde el <b>inicio del sprint</b> hasta la fecha final. Vacío en sprint = se detecta el sprint de esa fecha.</p>
           <label>Diferenciador Azure DevOps</label>
           <input id="diferenciador" placeholder="ej: muñoz">
         </div>
 
         <div class="section-card">
-          <h2>2. Período</h2>
-          <label>Fecha final</label>
-          <input type="date" id="fechaFinal">
-          <label>Días hacia atrás</label>
-          <input type="number" id="diasAtras" value="21" min="1">
-          <label>Sprints específicos (opcional)</label>
-          <input id="sprints" placeholder="280 o 279,280">
-          <p class="hint" style="margin-top:10px">Vacío = detección automática por rango de fechas.</p>
-        </div>
-
-        <div class="section-card">
-          <h2>3. Resumen previo</h2>
-          <p class="hint">Período efectivo estimado según fecha final y días hacia atrás.</p>
-          <div class="kpi info" style="margin-top:8px"><div class="k-label">Período efectivo</div><div class="k-value" id="periodoPreview" style="font-size:15px">—</div></div>
+          <h2>3. Período efectivo</h2>
+          <p class="hint">Rango que se analizará según el sprint y la fecha final.</p>
+          <div class="kpi info" style="margin-top:8px"><div class="k-label">Período</div><div class="k-value" id="periodoPreview" style="font-size:15px">—</div></div>
+          <button class="link" id="calcBtn" type="button" style="margin-top:8px">Calcular período del sprint</button>
         </div>
       </div>
 
@@ -103,13 +101,14 @@
 
     <!-- MIS EJECUCIONES -->
     <section class="view" id="view-ejecuciones">
-      <div class="page-head"><h1><span class="accent-bar"></span>Mis ejecuciones</h1><p>Historial de análisis generados. Haz clic para abrir el reporte.</p></div>
-      <div id="runsList"><p class="hint">Cargando…</p></div>
+      <div class="page-head"><h1><span class="accent-bar"></span>Mis ejecuciones</h1><p>Historial de análisis generados. Haz clic en “Ver” para abrir el reporte.</p></div>
+      <div class="section-card" id="runsList"><p class="hint">Cargando…</p></div>
     </section>
 
-    <!-- PERFIL -->
+    <!-- CREDENCIALES -->
     <section class="view" id="view-perfil">
-      <div class="page-head"><h1><span class="accent-bar"></span>Perfil</h1><p>Configuración reutilizable en cada ejecución.</p></div>
+      <div class="page-head"><h1><span class="accent-bar"></span>Credenciales</h1><p>Configuración reutilizable en cada ejecución.</p></div>
+      <div class="note" id="onboardNote" style="display:none">Bienvenido 👋 Completa tus datos de Azure y (opcional) Camaleom para empezar. Solo se pide la primera vez.</div>
       <div class="section-card">
         <h2>Azure</h2>
         <div style="margin:10px 0"><label>Email</label><input id="pEmail" disabled></div>
@@ -128,7 +127,7 @@
           <div><label>Contraseña Camaleom</label><input type="password" id="camPass" placeholder="dejar en blanco para no cambiar"></div>
         </div>
       </div>
-      <button class="btn grad" id="saveProfileBtn">Guardar perfil</button>
+      <button class="btn grad" id="saveProfileBtn">Guardar</button>
       <span id="profileSaved" class="saved-ok">Guardado</span>
     </section>
   </main>
@@ -143,7 +142,7 @@
 
 <script src="/static/icons.js"></script>
 <script>
-let ME = null, SOURCE = "xlsx";
+let ME = null, SOURCE = "xlsx", sprintStart = null;
 renderIcons();
 
 function nav(view) {
@@ -156,9 +155,8 @@ function nav(view) {
 document.querySelectorAll(".nav-item[data-view]").forEach(n => n.addEventListener("click", () => nav(n.dataset.view)));
 document.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => nav(b.dataset.goto)));
 document.getElementById("menuBtn").addEventListener("click", () => document.getElementById("sidebar").classList.toggle("open"));
-document.getElementById("logoutBtn").addEventListener("click", async () => { await fetch("/api/logout", {method:"POST"}); location.href = "/"; });
+document.getElementById("logoutBtn").addEventListener("click", async () => { await fetch("/api/logout", {method:"POST"}); location.replace("/"); });
 
-// source selector
 document.querySelectorAll(".radio-chip").forEach(c => c.addEventListener("click", () => {
   document.querySelectorAll(".radio-chip").forEach(x => x.classList.remove("active"));
   c.classList.add("active"); SOURCE = c.dataset.src;
@@ -168,7 +166,7 @@ document.querySelectorAll(".radio-chip").forEach(c => c.addEventListener("click"
 
 async function loadMe() {
   const r = await fetch("/api/me");
-  if (!r.ok) { location.href = "/"; return; }
+  if (!r.ok) { location.replace("/"); return; }
   ME = await r.json();
   document.getElementById("helloName").textContent = ME.email.split("@")[0];
   document.getElementById("pEmail").value = ME.email;
@@ -186,12 +184,17 @@ async function loadMe() {
   document.getElementById("cfgDiff").textContent = p.azure_full_name || "—";
   document.getElementById("cfgCam").textContent = p.camaleom_user || "No recordado";
   document.getElementById("camPass").placeholder = p.camaleom_pass_saved ? "guardada (dejar en blanco para no cambiar)" : "contraseña";
-  document.getElementById("camCredNote").textContent = p.camaleom_user
-    ? `Usará el usuario “${p.camaleom_user}”. ${p.camaleom_pass_saved ? "Contraseña guardada." : "⚠ Falta guardar la contraseña en Perfil."}`
-    : "⚠ No tienes credenciales de Camaleom guardadas. Ve a Perfil para agregarlas.";
+  document.getElementById("camCredNote").innerHTML = p.camaleom_user
+    ? `Usará el usuario “${p.camaleom_user}”. ${p.camaleom_pass_saved ? "Contraseña guardada." : "⚠ Falta guardar la contraseña en Credenciales."}`
+    : "⚠ No tienes credenciales de Camaleom guardadas. Ve a “Credenciales” para agregarlas.";
   const today = new Date(); today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
   document.getElementById("fechaFinal").value = today.toISOString().slice(0,10);
   updatePeriodo();
+  // Onboarding: primera vez sin datos guardados
+  if (!p.azure_full_name && !p.camaleom_user) {
+    document.getElementById("onboardNote").style.display = "block";
+    nav("perfil");
+  }
 }
 
 const fileInput = document.getElementById("camaleomExcel");
@@ -201,16 +204,30 @@ fileInput.addEventListener("change", () => {
   document.getElementById("fileDrop").classList.toggle("has-file", fileInput.files.length > 0);
 });
 
+function fmtDate(iso){ const d = new Date(iso + "T00:00:00"); return d.toLocaleDateString("es-CO",{day:"2-digit",month:"2-digit",year:"numeric"}); }
 function updatePeriodo() {
   const ff = document.getElementById("fechaFinal").value;
-  const dias = parseInt(document.getElementById("diasAtras").value || "0", 10);
-  if (!ff) { document.getElementById("periodoPreview").textContent = "—"; return; }
-  const fin = new Date(ff + "T00:00:00"); const ini = new Date(fin); ini.setDate(ini.getDate() - dias);
-  const fmt = d => d.toLocaleDateString("es-CO", {day:"2-digit", month:"2-digit", year:"numeric"});
-  document.getElementById("periodoPreview").textContent = `${fmt(ini)} → ${fmt(fin)}`;
+  const sp = document.getElementById("sprints").value.trim();
+  const box = document.getElementById("periodoPreview");
+  if (!ff) { box.textContent = "—"; return; }
+  if (sprintStart) box.textContent = `${fmtDate(sprintStart)} → ${fmtDate(ff)}`;
+  else if (sp) box.textContent = `Inicio del sprint → ${fmtDate(ff)} (usa “Calcular”)`;
+  else box.textContent = `Se detecta el sprint de ${fmtDate(ff)}`;
+}
+async function calcularPeriodo() {
+  const sp = document.getElementById("sprints").value.trim();
+  sprintStart = null;
+  if (!sp) { updatePeriodo(); return; }
+  const params = new URLSearchParams({ sprints: sp, azure_org: document.getElementById("azureOrg").value, azure_project: document.getElementById("azureProject").value, azure_team: document.getElementById("azureTeam").value });
+  try {
+    const r = await fetch("/api/azure/sprint-range?" + params.toString());
+    if (r.ok) { const d = await r.json(); sprintStart = d.fecha_inicio; }
+  } catch(e){}
+  updatePeriodo();
 }
 document.getElementById("fechaFinal").addEventListener("input", updatePeriodo);
-document.getElementById("diasAtras").addEventListener("input", updatePeriodo);
+document.getElementById("sprints").addEventListener("change", calcularPeriodo);
+document.getElementById("calcBtn").addEventListener("click", calcularPeriodo);
 document.getElementById("diferenciador").addEventListener("input", e => document.getElementById("cfgDiff").textContent = e.target.value || "—");
 
 function showError(m){ const e=document.getElementById("errorMsg"); e.textContent=m; e.classList.add("show"); }
@@ -220,11 +237,10 @@ document.getElementById("runBtn").addEventListener("click", async () => {
   const ff = document.getElementById("fechaFinal").value;
   if (!ff) return showError("Indica la fecha final.");
   if (SOURCE === "xlsx" && !fileInput.files.length) return showError("Sube el Excel de Camaleom o cambia al modo automático.");
-  if (SOURCE === "camaleom" && !document.getElementById("camUser").value) return showError("No tienes credenciales de Camaleom guardadas. Ve a Perfil.");
+  if (SOURCE === "camaleom" && !document.getElementById("camUser").value) return showError("No tienes credenciales de Camaleom guardadas. Ve a Credenciales.");
   const fd = new FormData();
   fd.append("source", SOURCE);
   fd.append("fecha_final", ff);
-  fd.append("dias_atras", document.getElementById("diasAtras").value || "21");
   fd.append("sprints", document.getElementById("sprints").value.trim());
   fd.append("diferenciador", document.getElementById("diferenciador").value.trim());
   fd.append("azure_org", document.getElementById("azureOrg").value);
@@ -256,24 +272,28 @@ function poll(jobId) {
   }, 2000);
 }
 
+function sprintTags(str){ return (str||"").split(",").filter(Boolean).map(s=>`Sprint ${s.trim()}`).join(", "); }
+
 async function loadRuns() {
   const box = document.getElementById("runsList");
   const r = await fetch("/api/runs");
   const { runs } = await r.json();
   document.getElementById("kRunsTotal").textContent = runs.length;
-  if (!runs.length) { box.innerHTML = '<p class="hint">Aún no tienes ejecuciones. Crea una en “Nueva ejecución”.</p>'; renderLast(null); return; }
-  renderLast(runs[0]);
-  box.innerHTML = runs.map(run => {
-    const m = run.metrics || {};
-    const fecha = new Date(run.created_at).toLocaleString("es-CO");
-    return `<div class="run-card" onclick="location.href='/report?run=${run.id}'">
-      <div class="r-main"><div class="r-title">Sprint ${run.sprints||"?"} · ${run.persona||"Todos"}</div>
-      <div class="r-sub">${run.periodo_inicio} → ${run.periodo_fin} · ${fecha}</div></div>
-      <div class="r-metric"><b>${m.tasks_reportadas??"-"}</b><span>reportadas</span></div>
-      <div class="r-metric"><b style="color:${(m.tasks_sin_reportar||0)>0?'var(--bad)':'var(--ok)'}">${m.tasks_sin_reportar??"-"}</b><span>sin reportar</span></div>
-      <div class="r-metric"><b>${m.total_reportado??"-"}h</b><span>reportado</span></div>
-    </div>`;
+  renderLast(runs[0] || null);
+  if (!runs.length) { box.innerHTML = '<p class="hint">Aún no tienes ejecuciones. Crea una en “Nueva ejecución”.</p>'; return; }
+  const rows = runs.map(run => {
+    const created = new Date(run.created_at).toLocaleString("es-CO");
+    return `<tr>
+      <td class="num">${run.id}</td>
+      <td>${run.periodo_inicio||""} → ${run.periodo_fin||""}</td>
+      <td>${run.persona||"Todos"}</td>
+      <td><span class="pill ok">completed</span></td>
+      <td style="color:var(--accent-2)">${sprintTags(run.sprints)}</td>
+      <td>${created}</td>
+      <td><a class="link" style="margin:0" href="/report?run=${run.id}">Ver</a></td>
+    </tr>`;
   }).join("");
+  box.innerHTML = `<div class="table-wrap"><table><thead><tr><th>ID</th><th>PERÍODO</th><th>PERSONA</th><th>ESTADO</th><th>SPRINTS</th><th>CREADO</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function renderLast(run) {
@@ -281,7 +301,7 @@ function renderLast(run) {
   if (!run) { box.innerHTML = '<p class="hint">Aún no tienes ejecuciones.</p>'; return; }
   const m = run.metrics || {};
   box.innerHTML = `<div class="run-card" onclick="location.href='/report?run=${run.id}'">
-    <div class="r-main"><div class="r-title">Sprint ${run.sprints||"?"} · ${run.persona||"Todos"}</div>
+    <div class="r-main"><div class="r-title">${sprintTags(run.sprints)} · ${run.persona||"Todos"}</div>
     <div class="r-sub">${run.periodo_inicio} → ${run.periodo_fin}</div></div>
     <div class="r-metric"><b style="color:${(m.balance||0)<0?'var(--bad)':'var(--ok)'}">${m.balance??"-"}h</b><span>balance</span></div>
     <div class="r-metric"><b>${m.total_reportado??"-"}h</b><span>reportado</span></div>
@@ -300,6 +320,7 @@ document.getElementById("saveProfileBtn").addEventListener("click", async () => 
   if (pass) body.camaleom_pass = pass;
   await fetch("/api/profile", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
   document.getElementById("camPass").value = "";
+  document.getElementById("onboardNote").style.display = "none";
   const s = document.getElementById("profileSaved"); s.style.display="inline"; setTimeout(()=>s.style.display="none", 2000);
   loadMe();
 });

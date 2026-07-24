@@ -50,9 +50,12 @@ def main() -> int:
     fecha_fin = date.fromisoformat(os.environ["CAM_FF"])
     formato = os.environ.get("CAM_FMT", "%d/%m/%Y")
 
+    print("Iniciando navegador Chromium...", flush=True)
     driver = crear_driver()
     try:
+        print(f"Abriendo Camaleom y enviando credenciales del usuario '{user}'...", flush=True)
         login_camaleom(driver, user=user, password=password, url=url)
+        print("Verificando si el login fue exitoso...", flush=True)
         url_actual = (driver.current_url or "").lower()
         if any(x in url_actual for x in ["login", "signin", "microsoftonline", "sso"]):
             motivo = _leer_error_login(driver)

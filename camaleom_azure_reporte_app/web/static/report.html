@@ -90,6 +90,14 @@
   </main>
 </div>
 
+<!-- Modal de detalle de nodo -->
+<div class="modal-overlay" id="nodeModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalTitle"></h3><button class="modal-x" onclick="closeModal()">✕</button></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
 <!-- Chatbot flotante (expandible) -->
 <button class="chat-fab" id="chatFab" title="Asistente IA"><span data-ic="chat"></span></button>
 <div class="chat-panel" id="chatPanel">
@@ -294,7 +302,6 @@ function renderSankey() {
   if (!cruce.length) { host.innerHTML = '<div class="empty">Sin datos para el flujo.</div>'; return; }
   const val = t => Math.max(parseFloat(t["Original Estimate Azure"])||0, parseFloat(t["Horas Camaleom"])||0, 0.4);
 
-  // Agrupar en 3 columnas: Sprint -> HU -> Estado
   const spV={}, huV={}, esV={}, linkA={}, linkB={};
   cruce.forEach(t => {
     const sp = t.Sprint || "Sin sprint";
@@ -306,60 +313,86 @@ function renderSankey() {
     linkA[sp+"||"+hu]=(linkA[sp+"||"+hu]||0)+v;
     linkB[hu+"||"+es]=(linkB[hu+"||"+es]||0)+v;
   });
-  const total = Object.values(esV).reduce((a,b)=>a+b,0) || 1;
-
+  const maxV = Math.max(...Object.values(esV), 1);
   const colData = [
     Object.entries(spV).sort((a,b)=>b[1]-a[1]),
     Object.entries(huV).sort((a,b)=>b[1]-a[1]),
     Object.entries(esV).sort((a,b)=>b[1]-a[1]),
   ];
-  const maxNodes = Math.max(...colData.map(c=>c.length));
-  const W = 960, pad = 18, gap = 9, nodeW = 13;
-  const H = Math.max(360, maxNodes*34 + pad*2);
-  const scale = (H - pad*2 - gap*(maxNodes-1)) / total;
-  const xs = [pad+46, W/2 - nodeW/2, W - pad - 100];
+  const maxN = Math.max(...colData.map(c=>c.length));
+  const W = 960, pad = 30, boxH = 22, boxW = [104, 96, 122];
+  const H = Math.max(320, maxN*(boxH+14) + pad*2);
+  const xs = [pad, W/2 - boxW[1]/2, W - pad - boxW[2]];
 
-  // Posicionar nodos
-  const nodes = {}; // key -> {x,y,h,off:{out:0,in:0},label,value,col}
+  // Nodos en cajoncitos, espaciados uniformemente (estilo constelación).
+  const nodes = {};
   colData.forEach((entries, ci) => {
-    let y = pad;
-    entries.forEach(([name, v]) => {
-      const h = Math.max(v*scale, 3);
-      nodes[ci+"::"+name] = { x: xs[ci], y, h, offOut:0, offIn:0, value:v, name, col:ci };
-      y += h + gap;
+    const n = entries.length, avail = H - pad*2 - boxH, step = n>1 ? avail/(n-1) : 0;
+    entries.forEach(([name, v], i) => {
+      const y = n>1 ? pad + i*step : (H-boxH)/2;
+      nodes[ci+"::"+name] = { x: xs[ci], y, cy: y+boxH/2, w: boxW[ci], v, name, col: ci };
     });
   });
 
   let links = "";
-  function link(sKey, tKey, v, color) {
-    const s = nodes[sKey], t = nodes[tKey]; if (!s || !t) return;
-    const h = Math.max(v*scale, 1.2);
-    const sy = s.y + s.offOut + h/2; s.offOut += h;
-    const ty = t.y + t.offIn + h/2; t.offIn += h;
-    const x1 = s.x + nodeW, x2 = t.x, mx = (x1+x2)/2;
-    const tip = `${s.name} → ${t.name} · ${v.toFixed(1)}h`;
-    links += `<path d="M${x1.toFixed(1)},${sy.toFixed(1)} C${mx.toFixed(1)},${sy.toFixed(1)} ${mx.toFixed(1)},${ty.toFixed(1)} ${x2.toFixed(1)},${ty.toFixed(1)}" fill="none" stroke="${color}" stroke-width="${h.toFixed(1)}" stroke-opacity=".28" class="flow-link" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
+  function link(sk, tk, v, color) {
+    const s = nodes[sk], t = nodes[tk]; if (!s || !t) return;
+    const w = Math.max(0.7, Math.min(2.6, 2.6*v/maxV));
+    const x1 = s.x+s.w, y1 = s.cy, x2 = t.x, y2 = t.cy, mx = (x1+x2)/2;
+    links += `<path d="M${x1},${y1.toFixed(1)} C${mx},${y1.toFixed(1)} ${mx},${y2.toFixed(1)} ${x2},${y2.toFixed(1)}" fill="none" stroke="${color}" stroke-width="${w.toFixed(2)}" stroke-opacity=".3" class="cst-link" data-s="${escA(sk)}" data-t="${escA(tk)}" data-tip="${escA(s.name+' → '+t.name+' · '+v.toFixed(1)+'h')}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
   }
   Object.entries(linkA).forEach(([k,v]) => { const [sp,hu]=k.split("||"); link("0::"+sp,"1::"+hu, v, "#8b5cf6"); });
   Object.entries(linkB).forEach(([k,v]) => { const [hu,es]=k.split("||"); link("1::"+hu,"2::"+es, v, EST_COLOR[es]||"#9aa0c3"); });
 
-  let rects = "";
-  Object.values(nodes).forEach(nd => {
+  let boxes = "";
+  Object.entries(nodes).forEach(([key,nd]) => {
     const color = nd.col===2 ? (EST_COLOR[nd.name]||"#9aa0c3") : (nd.col===1 ? "#22d3ee" : "#8b5cf6");
-    const tip = `${nd.name} · ${nd.value.toFixed(1)}h`;
-    rects += `<rect x="${nd.x}" y="${nd.y.toFixed(1)}" width="${nodeW}" height="${nd.h.toFixed(1)}" rx="3" fill="${color}" class="flow-node" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
-    const anchor = nd.col===0 ? "end" : "start";
-    const tx = nd.col===0 ? nd.x-6 : nd.x+nodeW+6;
-    const lbl = nd.name.length>22 ? nd.name.slice(0,21)+"…" : nd.name;
-    rects += `<text x="${tx}" y="${(nd.y+nd.h/2+3.5).toFixed(1)}" text-anchor="${anchor}" class="flow-lbl">${escA(lbl)}</text>`;
+    const lbl = nd.name.length>17 ? nd.name.slice(0,16)+"…" : nd.name;
+    boxes += `<g class="cst-node" data-key="${escA(key)}" data-col="${nd.col}" data-name="${escA(nd.name)}" onclick="openNode(this)" onmouseenter="hlNode(this,true)" onmouseleave="hlNode(this,false)">
+      <rect x="${nd.x}" y="${nd.y.toFixed(1)}" width="${nd.w}" height="${boxH}" rx="6" fill="rgba(18,20,38,.92)" stroke="${color}" stroke-width="1.4"/>
+      <circle cx="${nd.col===0 ? nd.x+nd.w : nd.x}" cy="${nd.cy.toFixed(1)}" r="3" fill="${color}"/>
+      <text x="${(nd.x+nd.w/2).toFixed(1)}" y="${(nd.cy+3.6).toFixed(1)}" text-anchor="middle" class="cst-lbl">${escA(lbl)}</text>
+    </g>`;
   });
 
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="sankey-svg" preserveAspectRatio="xMidYMid meet">
-    <text x="${xs[0]-40}" y="12" class="flow-col-lbl">SPRINT</text>
-    <text x="${W/2}" y="12" text-anchor="middle" class="flow-col-lbl">HU</text>
-    <text x="${W-pad}" y="12" text-anchor="end" class="flow-col-lbl">ESTADO</text>
-    ${links}${rects}</svg>`;
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="cst-svg" preserveAspectRatio="xMidYMid meet">
+    <text x="${xs[0]}" y="16" class="flow-col-lbl">SPRINT</text>
+    <text x="${W/2}" y="16" text-anchor="middle" class="flow-col-lbl">HU</text>
+    <text x="${W-pad}" y="16" text-anchor="end" class="flow-col-lbl">ESTADO</text>
+    <g>${links}</g><g>${boxes}</g></svg>`;
 }
+function hlNode(el, on) {
+  const key = el.dataset.key, svg = el.closest("svg");
+  svg.querySelectorAll(".cst-link").forEach(l => {
+    const c = l.dataset.s===key || l.dataset.t===key;
+    l.style.strokeOpacity = on ? (c ? 0.85 : 0.05) : 0.3;
+  });
+  const r = el.querySelector("rect"); if (r) r.style.filter = on ? "brightness(1.35)" : "";
+}
+function openNode(el) {
+  const col = +el.dataset.col, name = el.dataset.name;
+  const cruce = (DATA.tables && DATA.tables.cruce) || [];
+  let rows = [], title = name;
+  if (col===0) { rows = cruce.filter(t => (t.Sprint||"")===name); title = name; }
+  else if (col===1) { const id = name.replace(/^HU\s*/,""); rows = cruce.filter(t => String(t.HU||"").trim().indexOf(id)===0); title = (rows[0]&&rows[0].HU) || name; }
+  else { rows = cruce.filter(t => (t["Estado reporte"]||"")===name); title = "Estado: " + name; }
+  const rep = rows.reduce((a,t)=>a+(parseFloat(t["Horas Camaleom"])||0),0);
+  const est = rows.reduce((a,t)=>a+(parseFloat(t["Original Estimate Azure"])||0),0);
+  const body = `<div class="modal-kpis">
+      <div><span>Tasks</span><b>${rows.length}</b></div>
+      <div><span>Estimadas</span><b>${est.toFixed(1)}h</b></div>
+      <div><span>Reportadas</span><b>${rep.toFixed(1)}h</b></div>
+    </div>
+    <div class="table-wrap" style="max-height:52vh"><table><thead><tr><th>ID</th><th>Título</th><th>Est.</th><th>Rep.</th><th>Estado</th></tr></thead><tbody>`
+    + rows.map(t => { const es=t["Estado reporte"]||""; const cl=es==="Reportada"?"ok":es==="Parcial"?"warn":es==="Excedida"?"info":es==="Falta reportar"?"bad":"muted";
+      return `<tr><td class="num">${escA(t.AzureID||"")}</td><td><div class="cell">${escA(t["Titulo Azure"]||"")}</div></td><td class="num">${escA(t["Original Estimate Azure"]||"")}</td><td class="num">${escA(t["Horas Camaleom"]||"")}</td><td><span class="pill ${cl}">${escA(es)}</span></td></tr>`; }).join("")
+    + `</tbody></table></div>`;
+  document.getElementById("modalTitle").textContent = title;
+  document.getElementById("modalBody").innerHTML = body;
+  document.getElementById("nodeModal").classList.add("show");
+}
+function closeModal() { document.getElementById("nodeModal").classList.remove("show"); }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 
 function renderMap() {
   const host = document.getElementById("neuralMap");

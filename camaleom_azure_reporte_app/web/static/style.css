@@ -203,14 +203,28 @@ td.num .cell { max-width: none; -webkit-line-clamp: 1; }
 .day-lbl { position: absolute; bottom: -32px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 9.5px; color: var(--muted); line-height: 1.35; white-space: nowrap; }
 .day-lbl b { display: block; color: var(--text); font-size: 10px; }
 
-/* ---------- Sankey (flujo de trabajo) ---------- */
-.sankey-svg { width: 100%; height: auto; max-height: 74vh; display: block; }
-.flow-link { transition: stroke-opacity .15s; cursor: pointer; }
-.flow-link:hover { stroke-opacity: .6 !important; }
-.flow-node { cursor: pointer; transition: filter .15s; }
-.flow-node:hover { filter: brightness(1.25); }
-.flow-lbl { fill: var(--text); font-size: 11px; font-family: inherit; }
+/* ---------- Flujo constelación ---------- */
+.cst-svg { width: 100%; height: auto; max-height: 76vh; display: block; }
+.cst-link { transition: stroke-opacity .15s; cursor: pointer; }
+.cst-link:hover { stroke-opacity: .85 !important; }
+.cst-node { cursor: pointer; }
+.cst-node rect { transition: filter .15s; }
+.cst-lbl { fill: var(--text); font-size: 10.5px; font-weight: 600; font-family: inherit; pointer-events: none; }
 .flow-col-lbl { fill: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; font-family: inherit; }
+
+/* ---------- Modal ---------- */
+.modal-overlay { position: fixed; inset: 0; background: rgba(6,7,14,.72); backdrop-filter: blur(4px); z-index: 80; display: none; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.show { display: flex; animation: fade .18s ease; }
+.modal { background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px; width: 100%; max-width: 720px; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.6); }
+.modal-head { display: flex; align-items: center; gap: 12px; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+.modal-head h3 { margin: 0; font-size: 15px; }
+.modal-x { margin-left: auto; background: none; border: none; color: var(--muted); font-size: 17px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+.modal-x:hover { background: rgba(255,255,255,.06); color: var(--text); }
+.modal-body { padding: 16px 18px; overflow-y: auto; }
+.modal-kpis { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.modal-kpis div { flex: 1 1 90px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+.modal-kpis span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; margin-bottom: 4px; }
+.modal-kpis b { font-size: 18px; }
 
 /* ---------- Mapa neuronal ---------- */
 .neural-svg { width: 100%; height: auto; max-height: 72vh; display: block; }

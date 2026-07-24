@@ -25,6 +25,16 @@ if not APP_SECRET_KEY:
 app.add_middleware(SessionMiddleware, secret_key=APP_SECRET_KEY, same_site="lax", https_only=False)
 
 
+@app.middleware("http")
+async def no_cache(request: Request, call_next):
+    """Evita que el navegador sirva HTML/JS/CSS/API cacheados (causaba loops en login/logout)."""
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
 @app.on_event("startup")
 def _startup() -> None:
     db.init_db()

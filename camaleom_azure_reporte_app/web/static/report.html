@@ -163,10 +163,12 @@ const COL_ORDER = ["AzureID","Sprint","Tipo","Estado","Estado Azure","Estado rep
 function tableHTML(rows) {
   if (!rows || !rows.length) return '<div class="table-wrap"><div class="empty">Sin datos para esta vista.</div></div>';
   const cols = Object.keys(rows[0]).sort((a,b)=>{ const ia=COL_ORDER.indexOf(a), ib=COL_ORDER.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
-  // Filtro para casi toda columna categorica (Sprint siempre; el resto si tiene entre 2 y 40 valores distintos).
+  // Filtro solo en columnas categóricas (no numéricas). Sprint siempre; el resto con 2..40 valores.
   const fcols = cols.filter(c => {
     if (NOFILTER.has(c)) return false;
-    const n = new Set(rows.map(r=>String(r[c]??"")).filter(Boolean)).size;
+    const vals = rows.map(r=>String(r[c]??"")).filter(Boolean);
+    if (vals.length && vals.every(v=>/^-?\d+([.,]\d+)?$/.test(v))) return false; // numérica -> no filtrar
+    const n = new Set(vals).size;
     if (c === "Sprint") return n >= 1;
     return n >= 2 && n <= 40;
   });

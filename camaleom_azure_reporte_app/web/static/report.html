@@ -172,7 +172,7 @@ function tableHTML(rows) {
   });
   const filterHTML = fcols.map(c => {
     const vals = [...new Set(rows.map(r=>String(r[c]??"")).filter(Boolean))].sort();
-    return `<select class="tfilter" data-col="${escA(c)}" onchange="applyFilters(this)"><option value="">${escA(c)}: todos</option>${vals.map(v=>`<option value="${escA(v)}">${escA(v)}</option>`).join("")}</select>`;
+    return `<div class="fgroup"><label>${escA(c)}</label><select class="tfilter" data-col="${escA(c)}" onchange="applyFilters(this)"><option value="">Todos</option>${vals.map(v=>`<option value="${escA(v)}">${escA(v)}</option>`).join("")}</select></div>`;
   }).join("");
   const head = cols.map(c=>`<th>${escA(c)}</th>`).join("");
   const body = rows.map(row => {
@@ -190,18 +190,39 @@ function tableHTML(rows) {
     }).join("");
     return `<tr data-fltr="${escA(key)}">${cells}</tr>`;
   }).join("");
-  return `<div class="tbar"><input class="search" placeholder="Buscar…" oninput="applyFilters(this)">${filterHTML}</div><div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  const searchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>';
+  return `<div class="tbar">
+    <div class="fgroup search-group"><label>Buscar</label>
+      <div class="search-wrap">${searchIcon}<input class="search" placeholder="Título, ID, texto…" oninput="applyFilters(this)"></div>
+    </div>
+    ${filterHTML}
+    <button class="clear-btn" onclick="clearFilters(this)">✕ Limpiar filtros</button>
+    <div class="tcount">Mostrando ${rows.length} de ${rows.length}</div>
+  </div>
+  <div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 function applyFilters(el) {
   const cont = el.closest("section.view");
   const search = (cont.querySelector(".search")?.value || "").trim().toLowerCase();
   const wanted = [...cont.querySelectorAll(".tfilter")].filter(s=>s.value).map(s=>`|${s.dataset.col}::${s.value}|`.toLowerCase());
+  let visible = 0, total = 0;
   cont.querySelectorAll("tbody tr").forEach(tr => {
+    total++;
     const fl = tr.getAttribute("data-fltr") || "";
     const okF = wanted.every(w => fl.includes(w));
     const okS = !search || tr.innerText.toLowerCase().includes(search);
-    tr.style.display = (okF && okS) ? "" : "none";
+    const show = okF && okS;
+    tr.style.display = show ? "" : "none";
+    if (show) visible++;
   });
+  const cnt = cont.querySelector(".tcount");
+  if (cnt) cnt.textContent = `Mostrando ${visible} de ${total}`;
+}
+function clearFilters(btn) {
+  const cont = btn.closest("section.view");
+  const s = cont.querySelector(".search"); if (s) s.value = "";
+  cont.querySelectorAll(".tfilter").forEach(f => f.value = "");
+  applyFilters(btn);
 }
 
 function renderTables() {

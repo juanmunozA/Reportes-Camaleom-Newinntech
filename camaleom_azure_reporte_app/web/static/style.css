@@ -147,12 +147,20 @@ td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-n
 .cell { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 300px; line-height: 1.35; }
 td.num .cell { max-width: none; -webkit-line-clamp: 1; }
 .empty { padding: 24px; color: var(--muted); text-align: center; }
-.tbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-.tbar .search { margin: 0; max-width: 260px; }
+.tbar { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.fgroup { display: flex; flex-direction: column; gap: 5px; }
+.fgroup label { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.search-group { flex: 1 1 200px; min-width: 180px; }
+.search-wrap { position: relative; }
+.search-wrap svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--muted); pointer-events: none; }
+.tbar .search { margin: 0; width: 100%; max-width: none; padding: 9px 12px 9px 34px; }
 .search { max-width: 300px; margin-bottom: 10px; font-size: 12px; padding: 8px 11px; }
-.tfilter { background: rgba(255,255,255,.03); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; cursor: pointer; }
+.tfilter { background: rgba(255,255,255,.03); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; font-size: 12px; cursor: pointer; min-width: 130px; }
 .tfilter:focus { outline: none; border-color: var(--accent-1); }
 .tfilter option { background: var(--panel-2); color: var(--text); }
+.clear-btn { align-self: flex-end; background: rgba(255,255,255,.03); border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 9px 13px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.clear-btn:hover { color: var(--bad); border-color: var(--bad); }
+.tcount { margin-left: auto; align-self: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
 /* HU / Fabricas */
 .hu-row { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 7px; cursor: pointer; transition: border-color .12s, background .12s; }

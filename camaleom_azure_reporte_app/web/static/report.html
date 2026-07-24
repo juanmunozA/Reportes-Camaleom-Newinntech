@@ -16,7 +16,6 @@
     <div class="nav-item active" data-view="resumen" title="Resumen"><span class="ic" data-ic="grid"></span> <span class="lbl">Resumen</span></div>
     <div class="nav-item" data-view="horas" title="Horas por día"><span class="ic" data-ic="clock"></span> <span class="lbl">Horas por día</span></div>
     <div class="nav-item" data-view="azure" title="Items de Azure"><span class="ic" data-ic="box"></span> <span class="lbl">Items de Azure</span></div>
-    <div class="nav-item" data-view="grafico" title="Gráfico"><span class="ic" data-ic="chart"></span> <span class="lbl">Gráfico</span></div>
     <div class="nav-item" data-view="mapa" title="Mapa neuronal"><span class="ic" data-ic="brain"></span> <span class="lbl">Mapa neuronal</span></div>
     <div class="nav-item" data-view="reportadas" title="Tasks reportadas"><span class="ic" data-ic="check"></span> <span class="lbl">Tasks reportadas</span></div>
     <div class="nav-item" data-view="sinreportar" title="Tasks sin reportar"><span class="ic" data-ic="alert"></span> <span class="lbl">Tasks sin reportar</span></div>
@@ -47,21 +46,6 @@
 
     <section class="view" id="view-horas"><div id="tbl-horas"></div></section>
     <section class="view" id="view-azure"><div id="tbl-azure"></div></section>
-    <section class="view" id="view-grafico">
-      <div class="chart-summary" id="chartSummary"></div>
-      <div class="section-card">
-        <div class="chart-head">
-          <h2>Flujo de trabajo · Sprint → HU → Estado</h2>
-          <div class="chart-legend">
-            <span><i class="dot ok"></i>Reportada</span><span><i class="dot" style="background:#22d3ee"></i>Excedida</span>
-            <span><i class="dot warn"></i>Parcial</span><span><i class="dot bad"></i>Falta reportar</span>
-            <span style="color:var(--muted)">Grosor = horas · pasa el mouse</span>
-          </div>
-        </div>
-        <div id="sankey"></div>
-      </div>
-    </section>
-
     <section class="view" id="view-mapa">
       <div class="section-card">
         <div class="chart-head">
@@ -159,7 +143,7 @@ async function load() {
   DATA = await r.json();
   const meta = DATA.meta || {};
   document.getElementById("metaLine").textContent = `Período ${meta.periodo_inicio} → ${meta.periodo_fin} · Persona: ${meta.persona} · Sprints: ${(meta.sprints||[]).join(", ")}`;
-  renderKPIs(); renderGlossary(); renderTables(); renderChart(); renderMap(); renderHU();
+  renderKPIs(); renderGlossary(); renderTables(); renderMap(); renderHU();
   document.getElementById("dlExcel").onclick = () => location.href = `/api/runs/${RUN_ID}/excel`;
 }
 
@@ -275,107 +259,10 @@ function showTip(e, el) {
 }
 function hideTip() { if (_tip) _tip.style.display = "none"; }
 
-function renderChart() {
-  const g = DATA.grafico || [];
-  const sum = document.getElementById("chartSummary");
-  const totalRep = g.reduce((a,d)=>a+ (+d.reportadas||0), 0);
-  const totalEsp = g.reduce((a,d)=>a+ (+d.esperadas||0), 0);
-  const diasLab = g.filter(d=>d.esperadas>0).length;
-  const cumplidos = g.filter(d=>d.esperadas>0 && d.reportadas>=d.esperadas-0.01).length;
-  const prom = diasLab ? totalRep/diasLab : 0;
-  const pct = totalEsp ? Math.round(100*totalRep/totalEsp) : 0;
-  sum.innerHTML = [
-    ["Total reportado", totalRep.toFixed(1)+"h", "cyan"],
-    ["Total esperado", totalEsp.toFixed(1)+"h", "info"],
-    ["Promedio / día", prom.toFixed(1)+"h", "purple"],
-    ["Días cumplidos", cumplidos+" / "+diasLab, cumplidos>=diasLab?"ok":"warn"],
-    ["% cumplimiento", pct+"%", pct>=100?"ok":pct>=70?"warn":"bad"],
-  ].map(([l,v,c])=>`<div class="cs-item ${c}"><span>${l}</span><b>${v}</b></div>`).join("");
+function closeModal() { document.getElementById("nodeModal").classList.remove("show"); }
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 
-  renderSankey();
-}
-
-const EST_COLOR = { "Reportada":"#34d399", "Excedida":"#22d3ee", "Parcial":"#fbbf24", "Falta reportar":"#fb7185", "Solo Camaleom":"#9aa0c3", "Sin estado":"#9aa0c3" };
-function renderSankey() {
-  const host = document.getElementById("sankey");
-  const cruce = (DATA.tables && DATA.tables.cruce) || [];
-  if (!cruce.length) { host.innerHTML = '<div class="empty">Sin datos para el flujo.</div>'; return; }
-  const val = t => Math.max(parseFloat(t["Original Estimate Azure"])||0, parseFloat(t["Horas Camaleom"])||0, 0.4);
-
-  const spV={}, huV={}, esV={}, linkA={}, linkB={};
-  cruce.forEach(t => {
-    const sp = t.Sprint || "Sin sprint";
-    const hid = (String(t.HU||"").match(/^\s*(\d+)/)||[])[1] || "?";
-    const hu = "HU " + hid;
-    const es = t["Estado reporte"] || "Sin estado";
-    const v = val(t);
-    spV[sp]=(spV[sp]||0)+v; huV[hu]=(huV[hu]||0)+v; esV[es]=(esV[es]||0)+v;
-    linkA[sp+"||"+hu]=(linkA[sp+"||"+hu]||0)+v;
-    linkB[hu+"||"+es]=(linkB[hu+"||"+es]||0)+v;
-  });
-  const maxV = Math.max(...Object.values(esV), 1);
-  const colData = [
-    Object.entries(spV).sort((a,b)=>b[1]-a[1]),
-    Object.entries(huV).sort((a,b)=>b[1]-a[1]),
-    Object.entries(esV).sort((a,b)=>b[1]-a[1]),
-  ];
-  const maxN = Math.max(...colData.map(c=>c.length));
-  const W = 960, pad = 30, boxH = 22, boxW = [104, 96, 122];
-  const H = Math.max(320, maxN*(boxH+14) + pad*2);
-  const xs = [pad, W/2 - boxW[1]/2, W - pad - boxW[2]];
-
-  // Nodos en cajoncitos, espaciados uniformemente (estilo constelación).
-  const nodes = {};
-  colData.forEach((entries, ci) => {
-    const n = entries.length, avail = H - pad*2 - boxH, step = n>1 ? avail/(n-1) : 0;
-    entries.forEach(([name, v], i) => {
-      const y = n>1 ? pad + i*step : (H-boxH)/2;
-      nodes[ci+"::"+name] = { x: xs[ci], y, cy: y+boxH/2, w: boxW[ci], v, name, col: ci };
-    });
-  });
-
-  let links = "";
-  function link(sk, tk, v, color) {
-    const s = nodes[sk], t = nodes[tk]; if (!s || !t) return;
-    const w = Math.max(0.7, Math.min(2.6, 2.6*v/maxV));
-    const x1 = s.x+s.w, y1 = s.cy, x2 = t.x, y2 = t.cy, mx = (x1+x2)/2;
-    links += `<path d="M${x1},${y1.toFixed(1)} C${mx},${y1.toFixed(1)} ${mx},${y2.toFixed(1)} ${x2},${y2.toFixed(1)}" fill="none" stroke="${color}" stroke-width="${w.toFixed(2)}" stroke-opacity=".3" class="cst-link" data-s="${escA(sk)}" data-t="${escA(tk)}" data-tip="${escA(s.name+' → '+t.name+' · '+v.toFixed(1)+'h')}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
-  }
-  Object.entries(linkA).forEach(([k,v]) => { const [sp,hu]=k.split("||"); link("0::"+sp,"1::"+hu, v, "#8b5cf6"); });
-  Object.entries(linkB).forEach(([k,v]) => { const [hu,es]=k.split("||"); link("1::"+hu,"2::"+es, v, EST_COLOR[es]||"#9aa0c3"); });
-
-  let boxes = "";
-  Object.entries(nodes).forEach(([key,nd]) => {
-    const color = nd.col===2 ? (EST_COLOR[nd.name]||"#9aa0c3") : (nd.col===1 ? "#22d3ee" : "#8b5cf6");
-    const lbl = nd.name.length>17 ? nd.name.slice(0,16)+"…" : nd.name;
-    boxes += `<g class="cst-node" data-key="${escA(key)}" data-col="${nd.col}" data-name="${escA(nd.name)}" onclick="openNode(this)" onmouseenter="hlNode(this,true)" onmouseleave="hlNode(this,false)">
-      <rect x="${nd.x}" y="${nd.y.toFixed(1)}" width="${nd.w}" height="${boxH}" rx="6" fill="rgba(18,20,38,.92)" stroke="${color}" stroke-width="1.4"/>
-      <circle cx="${nd.col===0 ? nd.x+nd.w : nd.x}" cy="${nd.cy.toFixed(1)}" r="3" fill="${color}"/>
-      <text x="${(nd.x+nd.w/2).toFixed(1)}" y="${(nd.cy+3.6).toFixed(1)}" text-anchor="middle" class="cst-lbl">${escA(lbl)}</text>
-    </g>`;
-  });
-
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="cst-svg" preserveAspectRatio="xMidYMid meet">
-    <text x="${xs[0]}" y="16" class="flow-col-lbl">SPRINT</text>
-    <text x="${W/2}" y="16" text-anchor="middle" class="flow-col-lbl">HU</text>
-    <text x="${W-pad}" y="16" text-anchor="end" class="flow-col-lbl">ESTADO</text>
-    <g>${links}</g><g>${boxes}</g></svg>`;
-}
-function hlNode(el, on) {
-  const key = el.dataset.key, svg = el.closest("svg");
-  svg.querySelectorAll(".cst-link").forEach(l => {
-    const c = l.dataset.s===key || l.dataset.t===key;
-    l.style.strokeOpacity = on ? (c ? 0.85 : 0.05) : 0.3;
-  });
-  const r = el.querySelector("rect"); if (r) r.style.filter = on ? "brightness(1.35)" : "";
-}
-function openNode(el) {
-  const col = +el.dataset.col, name = el.dataset.name;
-  const cruce = (DATA.tables && DATA.tables.cruce) || [];
-  let rows = [], title = name;
-  if (col===0) { rows = cruce.filter(t => (t.Sprint||"")===name); title = name; }
-  else if (col===1) { const id = name.replace(/^HU\s*/,""); rows = cruce.filter(t => String(t.HU||"").trim().indexOf(id)===0); title = (rows[0]&&rows[0].HU) || name; }
-  else { rows = cruce.filter(t => (t["Estado reporte"]||"")===name); title = "Estado: " + name; }
+function openRowsModal(title, rows) {
   const rep = rows.reduce((a,t)=>a+(parseFloat(t["Horas Camaleom"])||0),0);
   const est = rows.reduce((a,t)=>a+(parseFloat(t["Original Estimate Azure"])||0),0);
   const body = `<div class="modal-kpis">
@@ -383,61 +270,81 @@ function openNode(el) {
       <div><span>Estimadas</span><b>${est.toFixed(1)}h</b></div>
       <div><span>Reportadas</span><b>${rep.toFixed(1)}h</b></div>
     </div>
-    <div class="table-wrap" style="max-height:52vh"><table><thead><tr><th>ID</th><th>Título</th><th>Est.</th><th>Rep.</th><th>Estado</th></tr></thead><tbody>`
+    <div class="table-wrap" style="max-height:52vh"><table><thead><tr><th>ID</th><th>Título</th><th>Sprint</th><th>Est.</th><th>Rep.</th><th>Estado</th></tr></thead><tbody>`
     + rows.map(t => { const es=t["Estado reporte"]||""; const cl=es==="Reportada"?"ok":es==="Parcial"?"warn":es==="Excedida"?"info":es==="Falta reportar"?"bad":"muted";
-      return `<tr><td class="num">${escA(t.AzureID||"")}</td><td><div class="cell">${escA(t["Titulo Azure"]||"")}</div></td><td class="num">${escA(t["Original Estimate Azure"]||"")}</td><td class="num">${escA(t["Horas Camaleom"]||"")}</td><td><span class="pill ${cl}">${escA(es)}</span></td></tr>`; }).join("")
+      return `<tr><td class="num">${escA(t.AzureID||"")}</td><td><div class="cell">${escA(t["Titulo Azure"]||"")}</div></td><td>${escA(t.Sprint||"")}</td><td class="num">${escA(t["Original Estimate Azure"]||"")}</td><td class="num">${escA(t["Horas Camaleom"]||"")}</td><td><span class="pill ${cl}">${escA(es)}</span></td></tr>`; }).join("")
     + `</tbody></table></div>`;
   document.getElementById("modalTitle").textContent = title;
   document.getElementById("modalBody").innerHTML = body;
   document.getElementById("nodeModal").classList.add("show");
 }
-function closeModal() { document.getElementById("nodeModal").classList.remove("show"); }
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+function openHuModal(id) { const cruce=(DATA.tables&&DATA.tables.cruce)||[]; const rows=cruce.filter(t=>String(t.HU||"").trim().indexOf(id)===0); openRowsModal((rows[0]&&rows[0].HU)||("HU "+id), rows); }
+function openTaskModal(azure) { const cruce=(DATA.tables&&DATA.tables.cruce)||[]; const rows=cruce.filter(t=>String(t.AzureID||"")===String(azure)); openRowsModal("Task "+azure, rows); }
 
+let mapState = { sprint:"", showTasks:true, query:"" };
 function renderMap() {
   const host = document.getElementById("neuralMap");
-  const hus = (DATA.hu_list || []).filter(h=> (h.tasks||0) > 0);
   const cruce = (DATA.tables && DATA.tables.cruce) || [];
-  if (!hus.length) { host.innerHTML = '<div class="empty">Sin HUs para mapear.</div>'; return; }
-  const repByHu = {}, tasksByHu = {};
-  cruce.forEach(t => {
-    const m = String(t.HU||"").match(/^\s*(\d+)/); if (!m) return; const id = m[1];
-    repByHu[id] = (repByHu[id]||0) + (parseFloat(t["Horas Camaleom"])||0);
-    (tasksByHu[id] = tasksByHu[id]||[]).push(t);
+  if (!cruce.length) { host.innerHTML = '<div class="empty">Sin datos para el mapa.</div>'; return; }
+  const sprints = [...new Set(cruce.map(t=>t.Sprint).filter(Boolean))].sort();
+  const sIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>';
+  host.innerHTML = `<div class="map-toolbar">
+    <div class="fgroup"><label>Sprint</label><select class="tfilter" onchange="mapState.sprint=this.value;drawMap()"><option value="">Todos</option>${sprints.map(s=>`<option ${mapState.sprint===s?"selected":""}>${escA(s)}</option>`).join("")}</select></div>
+    <div class="fgroup search-group" style="max-width:230px"><label>Buscar HU</label><div class="search-wrap">${sIcon}<input class="search" placeholder="ID de HU…" value="${escA(mapState.query)}" oninput="mapState.query=this.value;drawMap()"></div></div>
+    <label class="map-toggle"><input type="checkbox" ${mapState.showTasks?"checked":""} onchange="mapState.showTasks=this.checked;drawMap()"><span>Mostrar tasks</span></label>
+    <button class="clear-btn" onclick="mapState={sprint:'',showTasks:true,query:''};renderMap()">Reiniciar</button>
+  </div>
+  <div id="mapCanvas"></div>`;
+  drawMap();
+}
+function drawMap() {
+  const canvas = document.getElementById("mapCanvas"); if (!canvas) return;
+  const cruce = (DATA.tables && DATA.tables.cruce) || [];
+  const cruceF = mapState.sprint ? cruce.filter(t=>t.Sprint===mapState.sprint) : cruce;
+  const repByHu={}, tasksByHu={}, meta={};
+  cruceF.forEach(t => { const id=(String(t.HU||"").match(/^\s*(\d+)/)||[])[1]; if(!id) return;
+    repByHu[id]=(repByHu[id]||0)+(parseFloat(t["Horas Camaleom"])||0);
+    (tasksByHu[id]=tasksByHu[id]||[]).push(t);
+    if(!meta[id]) meta[id]={id, hu:t.HU||("HU "+id), est:0};
+    meta[id].est += (parseFloat(t["Original Estimate Azure"])||0); });
+  const ids = Object.keys(meta).sort((a,b)=>meta[b].est-meta[a].est);
+  if (!ids.length) { canvas.innerHTML='<div class="empty">Sin HUs para este filtro.</div>'; return; }
+  const n = ids.length;
+  const W=1000, H=Math.max(560, 140+n*44), cx=W/2, cy=H/2, R1=Math.min(cx,cy)-150;
+  const maxEst = Math.max(1, ...ids.map(id=>meta[id].est));
+  const q = mapState.query.trim();
+  let edges="", tasks="", nodes="";
+  ids.forEach((id,i) => {
+    const ang=-Math.PI/2+2*Math.PI*i/n, x=cx+R1*Math.cos(ang), y=cy+R1*Math.sin(ang);
+    const est=meta[id].est, rep=repByHu[id]||0, cov=est>0?rep/est:(rep>0?1:0);
+    const color=cov>=0.999?"#34d399":cov>0?"#fbbf24":"#fb7185";
+    const r=13+16*Math.sqrt(est/maxEst), covPct=est>0?Math.round(100*rep/est):0;
+    const dim = q && id.indexOf(q)<0;
+    edges += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${color}" stroke-width="${(1.4+3*Math.sqrt(est/maxEst)).toFixed(1)}" stroke-opacity="${dim?.05:.32}" class="nx-edge synapse" data-hu="${id}"/>`;
+    if (mapState.showTasks) { const ts=tasksByHu[id]||[], m=ts.length;
+      ts.forEach((t,j) => { const a=ang+(-0.6+(m>1?j/(m-1):0.5)*1.2), rr=r+32, tx=x+rr*Math.cos(a), ty=y+rr*Math.sin(a);
+        const done=["Reportada","Excedida"].includes(String(t["Estado reporte"]));
+        tasks += `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${color}" stroke-width="1" stroke-opacity="${dim?.04:.22}" class="nx-edge" data-hu="${id}"/>`;
+        tasks += `<circle cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="4.6" fill="${done?"#34d399":"#fb7185"}" fill-opacity="${dim?.25:1}" class="neuron-sm" data-hu="${id}" data-tip="${escA("Task "+(t.AzureID||"")+" · "+(t["Horas Camaleom"]||0)+"h · "+(t["Estado reporte"]||""))}" onclick="openTaskModal('${escA(String(t.AzureID||""))}')" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
+      });
+    }
+    nodes += `<g class="nx-hu" data-hu="${id}" style="cursor:pointer;opacity:${dim?.3:1}" onmouseenter="hlHu('${id}',true)" onmouseleave="hlHu('${id}',false)" onclick="openHuModal('${id}')">
+      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" fill-opacity=".9" filter="url(#nglow)" class="neuron" data-tip="${escA(meta[id].hu+" · est "+est+"h · rep "+rep.toFixed(1)+"h · "+covPct+"%")}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>
+      <text x="${x.toFixed(1)}" y="${(y+r+13).toFixed(1)}" text-anchor="middle" class="neuron-lbl">${escA(id)}</text>
+    </g>`;
   });
-  const W=920, H=580, cx=W/2, cy=H/2, R1=Math.min(W,H)/2-150, n=hus.length;
-  const maxEst = Math.max(1, ...hus.map(h=>h.estimadas||0));
-  const nodes = hus.map((h,i) => {
-    const ang = (-Math.PI/2) + (2*Math.PI*i/n);
-    const est = h.estimadas||0, rep = repByHu[h.id]||0;
-    const r = 11 + 17*Math.sqrt(est/maxEst);
-    const cov = est>0 ? rep/est : (rep>0?1:0);
-    const color = cov>=0.999 ? "#34d399" : cov>0 ? "#fbbf24" : "#fb7185";
-    return { h, x: cx+R1*Math.cos(ang), y: cy+R1*Math.sin(ang), r, est, rep, cov, color, ang };
-  });
-  let s = `<svg viewBox="0 0 ${W} ${H}" class="neural-svg" preserveAspectRatio="xMidYMid meet"><defs>
-    <radialGradient id="coreG"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#8b5cf6"/></radialGradient>
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
-  nodes.forEach(nd => { const w = 1.5 + 4*Math.sqrt(nd.est/maxEst);
-    s += `<line x1="${cx}" y1="${cy}" x2="${nd.x.toFixed(1)}" y2="${nd.y.toFixed(1)}" stroke="${nd.color}" stroke-width="${w.toFixed(1)}" stroke-opacity=".3" class="synapse"/>`; });
-  nodes.forEach(nd => { const ts=(tasksByHu[nd.h.id]||[]).slice(0,7); const m=ts.length;
-    ts.forEach((t,j) => { const a=nd.ang + (-0.55 + (m>1? j/(m-1):0.5)*1.1); const rr=nd.r+30;
-      const tx=nd.x+rr*Math.cos(a), ty=nd.y+rr*Math.sin(a);
-      const done = ["Reportada","Excedida"].includes(String(t["Estado reporte"]));
-      const tip = `Task ${t.AzureID} · ${t["Horas Camaleom"]||0}h · ${t["Estado reporte"]||""}`;
-      s += `<line x1="${nd.x.toFixed(1)}" y1="${nd.y.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${nd.color}" stroke-width="1" stroke-opacity=".22" class="synapse"/>`;
-      s += `<circle cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="4.5" fill="${done?"#34d399":"#fb7185"}" class="neuron-sm" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
-    });
-  });
-  nodes.forEach(nd => {
-    const cov = nd.est>0 ? Math.round(100*nd.rep/nd.est) : 0;
-    const tip = `${nd.h.hu}  ·  ${nd.h.tasks} task(s)  ·  estimadas ${nd.est}h  ·  reportadas ${nd.rep.toFixed(1)}h  ·  ${cov}%`;
-    s += `<circle cx="${nd.x.toFixed(1)}" cy="${nd.y.toFixed(1)}" r="${nd.r.toFixed(1)}" fill="${nd.color}" fill-opacity=".85" filter="url(#glow)" class="neuron" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
-    s += `<text x="${nd.x.toFixed(1)}" y="${(nd.y+nd.r+13).toFixed(1)}" text-anchor="middle" class="neuron-lbl">${escA(nd.h.id)}</text>`;
-  });
-  s += `<circle cx="${cx}" cy="${cy}" r="30" fill="url(#coreG)" filter="url(#glow)" class="core"/>`;
-  s += `<text x="${cx}" y="${cy+4}" text-anchor="middle" class="core-lbl">${escA((DATA.meta&&DATA.meta.persona)||"Tú")}</text></svg>`;
-  host.innerHTML = s;
+  canvas.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="neural-svg" preserveAspectRatio="xMidYMid meet"><defs>
+    <radialGradient id="coreG2"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#8b5cf6"/></radialGradient>
+    <filter id="nglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    <g>${edges}</g>${tasks}${nodes}
+    <circle cx="${cx}" cy="${cy}" r="30" fill="url(#coreG2)" filter="url(#nglow)" class="core"/>
+    <text x="${cx}" y="${(cy+4)}" text-anchor="middle" class="core-lbl">${escA((DATA.meta&&DATA.meta.persona)||"Tú")}</text></svg>`;
+}
+function hlHu(id, on) {
+  const c = document.getElementById("mapCanvas"); if (!c) return;
+  c.querySelectorAll(".nx-edge").forEach(e => { e.style.strokeOpacity = on ? (e.dataset.hu===id?0.9:0.04) : ""; });
+  c.querySelectorAll(".nx-hu").forEach(g => { if (g.dataset.hu!==id) g.style.opacity = on?0.22:""; });
+  c.querySelectorAll(".neuron-sm").forEach(s => { if (s.dataset.hu!==id) s.style.fillOpacity = on?0.15:""; });
 }
 
 function showView(v) {

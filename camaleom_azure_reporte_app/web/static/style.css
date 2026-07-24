@@ -227,6 +227,10 @@ td.num .cell { max-width: none; -webkit-line-clamp: 1; }
 .modal-kpis b { font-size: 18px; }
 
 /* ---------- Mapa neuronal ---------- */
+.map-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+.map-toggle { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); cursor: pointer; align-self: flex-end; padding-bottom: 8px; white-space: nowrap; }
+.map-toggle input { width: 15px; height: 15px; accent-color: var(--accent-1); cursor: pointer; }
+.nx-edge { stroke-dasharray: 4 7; animation: synFlow 1.9s linear infinite; transition: stroke-opacity .15s; }
 .neural-svg { width: 100%; height: auto; max-height: 72vh; display: block; }
 .neuron { cursor: pointer; transition: fill-opacity .15s; transform-box: fill-box; transform-origin: center; animation: neuronPulse 3s ease-in-out infinite; }
 .neuron:hover { fill-opacity: 1 !important; }

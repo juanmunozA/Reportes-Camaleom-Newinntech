@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS app_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_app_runs_user ON app_runs(user_id, created_at DESC);
+
+ALTER TABLE camaleom_profiles ADD COLUMN IF NOT EXISTS factory_hus TEXT;
 """
 
 
@@ -229,6 +231,35 @@ def get_run_xlsx(user_id: int, run_id: int) -> bytes | None:
             cur.execute("SELECT xlsx FROM app_runs WHERE id = %s AND user_id = %s", (run_id, user_id))
             row = cur.fetchone()
             return bytes(row[0]) if row and row[0] else None
+
+
+def get_factory(user_id: int) -> list[str]:
+    import json
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT factory_hus FROM camaleom_profiles WHERE user_id = %s", (user_id,))
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return []
+            try:
+                return list(json.loads(row[0]))
+            except Exception:
+                return []
+
+
+def set_factory(user_id: int, hus: list[str]) -> None:
+    import json
+    data = json.dumps([str(h) for h in (hus or [])])
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO camaleom_profiles (user_id, factory_hus, updated_at)
+                VALUES (%s, %s, now())
+                ON CONFLICT (user_id) DO UPDATE SET factory_hus = EXCLUDED.factory_hus, updated_at = now()
+                """,
+                (user_id, data),
+            )
 
 
 def count_runs_today(user_id: int) -> int:

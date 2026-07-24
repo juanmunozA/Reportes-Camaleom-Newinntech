@@ -93,7 +93,10 @@ button.link:hover { text-decoration: underline; }
 .nav-item.active { background: linear-gradient(135deg, rgba(139,92,246,.22), rgba(34,211,238,.14)); color: #fff; border-color: rgba(139,92,246,.35); }
 .nav-sep { height: 1px; background: var(--line); margin: 8px 6px; }
 .nav-spacer { flex: 1; }
-.layout.collapsed .sidebar .lbl, .layout.collapsed .sidebar .logo span:not(.sq), .layout.collapsed .collapse-btn { display: none; }
+.nav-toggle { color: var(--accent-2); }
+.nav-toggle .ic { transition: transform .18s; }
+.layout.collapsed .nav-toggle .ic { transform: rotate(180deg); }
+.layout.collapsed .sidebar .lbl, .layout.collapsed .sidebar .logo span:not(.sq) { display: none; }
 .layout.collapsed .nav-item { justify-content: center; padding: 8px 0; }
 
 .content { padding: 18px 22px 48px; max-width: 1360px; }
@@ -150,8 +153,17 @@ td.num .cell { max-width: none; -webkit-line-clamp: 1; }
 .tfilter { background: rgba(255,255,255,.03); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; cursor: pointer; }
 .tfilter:focus { outline: none; border-color: var(--accent-1); }
 .tfilter option { background: var(--panel-2); color: var(--text); }
+
+/* HU / Fabricas */
+.hu-row { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 7px; cursor: pointer; transition: border-color .12s, background .12s; }
+.hu-row:hover { border-color: var(--accent-1); background: rgba(139,92,246,.05); }
+.hu-row input { width: 17px; height: 17px; accent-color: var(--accent-1); cursor: pointer; flex: none; }
+.hu-txt b { display: block; font-size: 13px; font-weight: 600; }
+.hu-txt small { color: var(--muted); font-size: 11.5px; }
+#huList { max-height: calc(100vh - 320px); overflow-y: auto; margin-top: 10px; }
 .pill { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .pill.ok { color: #062e1f; background: var(--ok); } .pill.bad { color: #2e0510; background: var(--bad); } .pill.warn { color: #2e2205; background: var(--warn); } .pill.muted { color: var(--muted); background: rgba(255,255,255,.08); }
+.pill.info { color: #04283a; background: var(--info); } .pill.purple { color: #1a0b33; background: var(--accent-1); }
 
 /* ---------- Bars (grafico) ---------- */
 .bars { display: flex; align-items: flex-end; gap: 10px; height: 260px; padding: 16px; overflow-x: auto; }

@@ -108,14 +108,27 @@ def cruzar_azure_camaleom(azure_df: pd.DataFrame, total_camaleom: pd.DataFrame) 
     for _, az in azure_tasks.iterrows():
         match, match_score, match_tipo = encontrar_match_camaleom(az, total_camaleom, camaleom_matched_keys)
         completed = float(az.get("Completed Work", 0) or 0)
+        estimate = float(az.get("Original Estimate", 0) or 0)
+        # Referencia de horas que deberia tener la task: lo trabajado (Completed) o, si no hay, lo estimado.
+        benchmark = completed if completed > 0 else estimate
+        tol = 0.01
         if match is not None:
             horas = float(match.get("TotalHoras", 0) or 0)
             desc_cam = match.get("DescripcionLimpia", "")
             reportes = match.get("Reportes", "")
             fechas = match.get("Fechas", "")
             veces = int(match.get("VecesReportada", 0) or 0)
-            estado_reporte = "Reportada" if horas > 0 else "Sin horas"
             camaleom_matched_keys.add(normalizar_texto(desc_cam))
+            if horas <= tol:
+                estado_reporte = "Falta reportar"
+            elif benchmark <= tol:
+                estado_reporte = "Reportada"
+            elif horas < benchmark - tol:
+                estado_reporte = "Parcial"
+            elif horas > benchmark + tol:
+                estado_reporte = "Excedida"
+            else:
+                estado_reporte = "Reportada"
         else:
             horas = 0.0
             desc_cam = ""

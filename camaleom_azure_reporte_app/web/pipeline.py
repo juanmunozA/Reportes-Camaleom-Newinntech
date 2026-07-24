@@ -149,21 +149,27 @@ def compute(azure_df, comparativo, resumen_dia, total_por_descripcion) -> dict[s
         hu_azure = int((~azure_df["Tipo"].apply(es_task_azure)).sum())
 
     tasks_reportadas = tasks_sin_reportar = tasks_asociadas = tasks_completas = registros_asociados = 0
+    tasks_parciales = tasks_excedidas = 0
     total_reportado = 0.0
     horas_faltantes = 0.0
     if comparativo is not None and not comparativo.empty:
         solo_tasks = comparativo[comparativo["Tipo"].apply(es_task_azure)]
-        tasks_reportadas = int((solo_tasks["Estado reporte"] == "Reportada").sum())
-        tasks_sin_reportar = int((solo_tasks["Estado reporte"] == "Falta reportar").sum())
+        estados = solo_tasks["Estado reporte"]
+        tasks_reportadas = int((estados == "Reportada").sum())
+        tasks_parciales = int((estados == "Parcial").sum())
+        tasks_excedidas = int((estados == "Excedida").sum())
+        tasks_sin_reportar = int((estados == "Falta reportar").sum())
         tasks_asociadas = int((solo_tasks["Descripcion Camaleom"].astype(str).str.len() > 0).sum())
         for _, r in solo_tasks.iterrows():
             est = _num(r.get("Original Estimate Azure"))
+            comp = _num(r.get("Completed Work Azure"))
+            bench = comp if comp > 0 else est
             hrs = _num(r.get("Horas Camaleom"))
             registros_asociados += int(_num(r.get("Veces reportada")))
-            if est > 0 and hrs >= est:
+            if bench > 0 and hrs >= bench:
                 tasks_completas += 1
-            if est > hrs:
-                horas_faltantes += est - hrs
+            if bench > hrs:
+                horas_faltantes += bench - hrs
 
     if total_por_descripcion is not None and not total_por_descripcion.empty and "TotalHoras" in total_por_descripcion:
         total_reportado = float(total_por_descripcion["TotalHoras"].sum())
@@ -180,6 +186,8 @@ def compute(azure_df, comparativo, resumen_dia, total_por_descripcion) -> dict[s
         "hu_azure": hu_azure,
         "tasks_azure": tasks_azure,
         "tasks_reportadas": tasks_reportadas,
+        "tasks_parciales": tasks_parciales,
+        "tasks_excedidas": tasks_excedidas,
         "tasks_sin_reportar": tasks_sin_reportar,
         "cobertura_tasks": pct(tasks_reportadas, tasks_azure),
         "registros_camaleom_asociados": registros_asociados,
@@ -307,8 +315,8 @@ def ejecutar(
                    "Completed Work Azure", "Horas Camaleom", "Diferencia Camaleom vs Completed",
                    "Match Score", "Veces reportada", "Fechas reales", "Estado reporte"]
 
-    reportadas = solo_tasks[solo_tasks["Estado reporte"] == "Reportada"] if not comparativo.empty else comparativo
-    sin_reportar = solo_tasks[solo_tasks["Estado reporte"] == "Falta reportar"] if not comparativo.empty else comparativo
+    reportadas = solo_tasks[solo_tasks["Estado reporte"].isin(["Reportada", "Excedida"])] if not comparativo.empty else comparativo
+    sin_reportar = solo_tasks[solo_tasks["Estado reporte"].isin(["Falta reportar", "Parcial"])] if not comparativo.empty else comparativo
     solo_camaleom = comparativo[comparativo["Estado reporte"] == "Solo Camaleom"] if not comparativo.empty else comparativo
     if not comparativo.empty:
         rev = solo_tasks[(solo_tasks["Descripcion Camaleom"].astype(str).str.len() > 0)

@@ -37,7 +37,7 @@ def _contexto(data: dict[str, Any]) -> str:
         "",
         "METRICAS GLOBALES:",
         f"- Items Azure: {m.get('items_azure')}, HU: {m.get('hu_azure')}, Tasks: {m.get('tasks_azure')}",
-        f"- Tasks reportadas: {m.get('tasks_reportadas')}, Tasks SIN reportar: {m.get('tasks_sin_reportar')}",
+        f"- Tasks reportadas (completas): {m.get('tasks_reportadas')}, Parciales (les faltan horas): {m.get('tasks_parciales')}, Excedidas (mas horas de las trabajadas): {m.get('tasks_excedidas')}, SIN reportar (0 horas): {m.get('tasks_sin_reportar')}",
         f"- Tasks completas (horas ok): {m.get('tasks_completas')}, Tasks pendientes de horas: {m.get('tasks_pendientes_horas')}",
         f"- Total reportado: {m.get('total_reportado')}h, Total esperado: {m.get('total_esperado')}h, Balance: {m.get('balance')}h",
         f"- Total horas faltantes por reportar: {m.get('total_horas_faltantes')}h",

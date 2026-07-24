@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from ..azure_devops import AzureDevOpsClient
 from ..config import (APP_SECRET_KEY, AZURE_DEVOPS_PAT, AZURE_ORG, AZURE_PROJECT,
                       AZURE_TEAM, DOWNLOAD_DIR, GEMINI_API_KEY)
-from . import db, gemini, jobs
+from . import db, factory, gemini, jobs
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -273,10 +273,25 @@ def run_get(run_id: int, request: Request):
     run = db.get_run(user["id"], run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Ejecucion no encontrada.")
-    data = run["data"]
+    data = factory.apply(run["data"], db.get_factory(user["id"]))
     data["id"] = run["id"]
     data["created_at"] = run["created_at"].isoformat() if run.get("created_at") else None
     return data
+
+
+@app.get("/api/factory")
+def factory_get(request: Request):
+    user = require_user(request)
+    return {"hus": db.get_factory(user["id"])}
+
+
+@app.post("/api/factory")
+async def factory_set(request: Request):
+    user = require_user(request)
+    body = await request.json()
+    hus = body.get("hus") or []
+    db.set_factory(user["id"], [str(h) for h in hus])
+    return {"ok": True}
 
 
 @app.get("/api/runs/{run_id}/excel")
@@ -306,8 +321,9 @@ async def chat(request: Request):
     run = db.get_run(user["id"], int(run_id)) if run_id else None
     if not run:
         raise HTTPException(status_code=404, detail="Primero genera o abre un reporte para poder preguntar sobre el.")
+    run_data = factory.apply(run["data"], db.get_factory(user["id"]))
     try:
-        answer = gemini.preguntar(run["data"], pregunta, historial)
+        answer = gemini.preguntar(run_data, pregunta, historial)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     return {"answer": answer}

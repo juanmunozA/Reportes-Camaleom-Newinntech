@@ -9,8 +9,8 @@
 <body>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <button class="collapse-btn" id="collapseBtn" title="Contraer" data-ic="collapse"></button>
     <div class="logo"><span class="sq" data-ic="logo"></span> <span>Reporte</span></div>
+    <div class="nav-item nav-toggle" id="collapseBtn" title="Contraer / expandir menú"><span class="ic" data-ic="collapse"></span> <span class="lbl">Contraer menú</span></div>
     <div class="nav-item" onclick="location.href='/'" title="Volver"><span class="ic" data-ic="back"></span> <span class="lbl">Volver a la app</span></div>
     <div class="nav-sep"></div>
     <div class="nav-item active" data-view="resumen" title="Resumen"><span class="ic" data-ic="grid"></span> <span class="lbl">Resumen</span></div>
@@ -21,6 +21,7 @@
     <div class="nav-item" data-view="sinreportar" title="Tasks sin reportar"><span class="ic" data-ic="alert"></span> <span class="lbl">Tasks sin reportar</span></div>
     <div class="nav-item" data-view="camaleom" title="Camaleom sin coincidencia"><span class="ic" data-ic="search"></span> <span class="lbl">Camaleom sin coincidencia</span></div>
     <div class="nav-item" data-view="revision" title="Revisión manual"><span class="ic" data-ic="eye"></span> <span class="lbl">Revisión manual</span></div>
+    <div class="nav-item" data-view="fabricas" title="HU / Fábricas"><span class="ic" data-ic="factory"></span> <span class="lbl">HU / Fábricas</span></div>
     <div class="nav-spacer"></div>
     <div class="nav-item" id="dlExcel" title="Descargar Excel"><span class="ic" data-ic="download"></span> <span class="lbl">Descargar Excel</span></div>
   </aside>
@@ -56,6 +57,17 @@
     <section class="view" id="view-sinreportar"><div id="tbl-sinreportar"></div></section>
     <section class="view" id="view-camaleom"><div id="tbl-camaleom"></div></section>
     <section class="view" id="view-revision"><div id="tbl-revision"></div></section>
+
+    <section class="view" id="view-fabricas">
+      <div class="section-card">
+        <h2>HU de fábrica</h2>
+        <p class="hint">Marca las HU que hace una fábrica (tercero). Sus tasks dejan de contar como horas tuyas pendientes y el asistente IA no las considera. Se guarda para todos tus reportes.</p>
+        <input class="search" id="huSearch" placeholder="Buscar HU…" oninput="filterHU(this.value)">
+        <div id="huList"></div>
+        <button class="btn grad" id="saveFactory" style="margin-top:14px">Guardar fábricas</button>
+        <span id="factorySaved" class="saved-ok">Guardado</span>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -82,19 +94,23 @@ renderIcons();
 
 const KPIS = [
   ["items_azure","Items Azure","","cyan"],["hu_azure","HU Azure","","purple"],["tasks_azure","Tasks Azure","","cyan"],
-  ["tasks_reportadas","Tasks reportadas","","ok"],["tasks_sin_reportar","Tasks sin reportar","","bad"],
+  ["tasks_reportadas","Tasks reportadas","","ok"],["tasks_parciales","Tasks parciales","","warn"],
+  ["tasks_excedidas","Tasks excedidas","","info"],["tasks_sin_reportar","Tasks sin reportar","","bad"],
   ["cobertura_tasks","Cobertura de tasks","%","cyan"],["registros_camaleom_asociados","Registros Camaleom","","purple"],
   ["tasks_asociadas","Tasks asociadas","","ok"],["tasks_completas","Tasks completas","","ok"],
   ["tasks_pendientes_horas","Tasks pendientes","","warn"],["cobertura_asociacion","Cobertura asociación","%","cyan"],
   ["cobertura_horas","Cobertura de horas","%","ok"],["total_reportado","Total reportado","h","info"],
   ["total_esperado","Total esperado","h","info"],["balance","Balance","h","bal"],["total_horas_faltantes","Horas faltantes","h","warn"],
+  ["tasks_fabrica","Tasks fábrica","","purple"],
 ];
 const GLOSSARY = {
   items_azure:"Total de elementos en Azure DevOps (HU y Tasks).",
   hu_azure:"Historias de usuario / PBIs que agrupan las Tasks.",
   tasks_azure:"Tareas asociadas a las HU, con horas estimadas.",
-  tasks_reportadas:"Tasks con al menos un registro de Camaleom asociado correctamente.",
-  tasks_sin_reportar:"Tasks sin horas registradas en Camaleom, o con menos de las estimadas.",
+  tasks_reportadas:"Tasks con las horas de Camaleom completas (igual a lo trabajado en Azure).",
+  tasks_parciales:"Tasks con horas en Camaleom pero MENOS de las que deberían (falta completar).",
+  tasks_excedidas:"Tasks con MÁS horas en Camaleom de las trabajadas en Azure (revisar).",
+  tasks_sin_reportar:"Tasks sin ninguna hora registrada en Camaleom.",
   cobertura_tasks:"Tasks reportadas frente al total de Tasks de Azure.",
   registros_camaleom_asociados:"Filas de Camaleom vinculadas con alguna Task.",
   tasks_asociadas:"Tasks con al menos un registro válido de Camaleom.",
@@ -106,6 +122,7 @@ const GLOSSARY = {
   total_esperado:"Horas laborales esperadas para el período.",
   balance:"Diferencia entre lo reportado y lo esperado.",
   total_horas_faltantes:"Suma de horas que aún faltan por reportar en todas las Tasks.",
+  tasks_fabrica:"Tasks de HUs marcadas como fábrica (tercero). No cuentan como horas tuyas pendientes.",
 };
 
 async function load() {
@@ -115,7 +132,7 @@ async function load() {
   DATA = await r.json();
   const meta = DATA.meta || {};
   document.getElementById("metaLine").textContent = `Período ${meta.periodo_inicio} → ${meta.periodo_fin} · Persona: ${meta.persona} · Sprints: ${(meta.sprints||[]).join(", ")}`;
-  renderKPIs(); renderGlossary(); renderTables(); renderChart();
+  renderKPIs(); renderGlossary(); renderTables(); renderChart(); renderHU();
   document.getElementById("dlExcel").onclick = () => location.href = `/api/runs/${RUN_ID}/excel`;
 }
 
@@ -139,13 +156,20 @@ function renderGlossary() {
 const QUICK = [["horas","Horas por día"],["azure","Items de Azure"],["grafico","Gráfico"],["reportadas","Tasks reportadas"],["sinreportar","Tasks sin reportar"],["camaleom","Camaleom sin coincidencia"],["revision","Revisión manual"]];
 document.getElementById("quickLinks").innerHTML = QUICK.map(([v,l])=>`<button onclick="showView('${v}')">${l}</button>`).join("");
 
-const FILTER_COLS = ["Sprint","Tipo","Estado","Estado Azure","Estado reporte"];
+// Columnas de texto libre / únicas: no tiene sentido un desplegable.
+const NOFILTER = new Set(["Titulo","Titulo Azure","AzureID","Descripcion Camaleom","Fechas reales","Reportes Camaleom","Match Score"]);
 const escA = s => String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
-const COL_ORDER = ["AzureID","Sprint","Tipo","Estado","Estado Azure","Estado reporte","HU","Titulo","Titulo Azure","Descripcion Camaleom","Original Estimate","Original Estimate Azure","Completed Work","Completed Work Azure","Horas Camaleom","Diferencia Camaleom vs Completed","Remaining Work","Veces reportada","Fechas reales","Reportes Camaleom","Match Score","Match Tipo","Tags","FechaRealPruebasUnitarias","Horas reportadas","Debe tener","Diferencia"];
+const COL_ORDER = ["AzureID","Sprint","Tipo","Estado","Estado Azure","Estado reporte","Fábrica","HU","Titulo","Titulo Azure","Descripcion Camaleom","Original Estimate","Original Estimate Azure","Completed Work","Completed Work Azure","Horas Camaleom","Diferencia Camaleom vs Completed","Remaining Work","Veces reportada","Fechas reales","Reportes Camaleom","Match Score","Match Tipo","Tags","FechaRealPruebasUnitarias","Horas reportadas","Debe tener","Diferencia"];
 function tableHTML(rows) {
   if (!rows || !rows.length) return '<div class="table-wrap"><div class="empty">Sin datos para esta vista.</div></div>';
   const cols = Object.keys(rows[0]).sort((a,b)=>{ const ia=COL_ORDER.indexOf(a), ib=COL_ORDER.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
-  const fcols = FILTER_COLS.filter(c => cols.includes(c) && new Set(rows.map(r=>String(r[c]??"")).filter(Boolean)).size > 1);
+  // Filtro para casi toda columna categorica (Sprint siempre; el resto si tiene entre 2 y 40 valores distintos).
+  const fcols = cols.filter(c => {
+    if (NOFILTER.has(c)) return false;
+    const n = new Set(rows.map(r=>String(r[c]??"")).filter(Boolean)).size;
+    if (c === "Sprint") return n >= 1;
+    return n >= 2 && n <= 40;
+  });
   const filterHTML = fcols.map(c => {
     const vals = [...new Set(rows.map(r=>String(r[c]??"")).filter(Boolean))].sort();
     return `<select class="tfilter" data-col="${escA(c)}" onchange="applyFilters(this)"><option value="">${escA(c)}: todos</option>${vals.map(v=>`<option value="${escA(v)}">${escA(v)}</option>`).join("")}</select>`;
@@ -157,8 +181,10 @@ function tableHTML(rows) {
       const raw = String(row[c] ?? ""); const num = /^-?\d+(\.\d+)?$/.test(raw);
       let inner = escA(raw);
       if (c === "Estado reporte") {
-        const cl = raw==="Reportada"?"ok":(raw==="Falta reportar"?"bad":(raw==="Solo Camaleom"?"warn":"muted"));
+        const cl = raw==="Reportada"?"ok":raw==="Parcial"?"warn":raw==="Excedida"?"info":raw==="Falta reportar"?"bad":"muted";
         inner = `<span class="pill ${cl}">${escA(raw)}</span>`;
+      } else if (c === "Fábrica" && raw === "Sí") {
+        inner = `<span class="pill purple">Fábrica</span>`;
       }
       return `<td class="${num?'num':''}"><div class="cell" title="${escA(raw)}">${inner}</div></td>`;
     }).join("");
@@ -203,10 +229,33 @@ function showView(v) {
   document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.classList.toggle("active", n.dataset.view===v));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
   document.getElementById("view-"+v).classList.add("active");
-  const titles = {resumen:"Resumen",horas:"Horas por día",azure:"Items de Azure",grafico:"Gráfico",reportadas:"Tasks reportadas",sinreportar:"Tasks sin reportar",camaleom:"Camaleom sin coincidencia",revision:"Revisión manual"};
+  const titles = {resumen:"Resumen",horas:"Horas por día",azure:"Items de Azure",grafico:"Gráfico",reportadas:"Tasks reportadas",sinreportar:"Tasks sin reportar",camaleom:"Camaleom sin coincidencia",revision:"Revisión manual",fabricas:"HU / Fábricas"};
   document.getElementById("pageTitle").textContent = titles[v] || "Reporte";
   document.getElementById("sidebar").classList.remove("open");
 }
+
+function renderHU() {
+  const list = DATA.hu_list || [];
+  const fset = new Set((DATA.factory || []).map(String));
+  const box = document.getElementById("huList");
+  if (!list.length) { box.innerHTML = '<p class="hint">No hay HUs en este reporte.</p>'; return; }
+  box.innerHTML = list.map(h => `
+    <label class="hu-row" data-hu="${escA((h.hu||'').toLowerCase())}">
+      <input type="checkbox" class="hu-check" value="${escA(h.id)}" ${fset.has(String(h.id))?'checked':''}>
+      <span class="hu-txt"><b>${escA(h.hu||h.id)}</b><small>${h.tasks} task(s) · ${h.estimadas}h estimadas · ${escA(h.sprint||'')}</small></span>
+    </label>`).join("");
+}
+function filterHU(q) {
+  q = (q||"").toLowerCase();
+  document.querySelectorAll("#huList .hu-row").forEach(r => { r.style.display = r.dataset.hu.includes(q) ? "" : "none"; });
+}
+document.getElementById("saveFactory").addEventListener("click", async () => {
+  const hus = [...document.querySelectorAll(".hu-check:checked")].map(c => c.value);
+  await fetch("/api/factory", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({hus}) });
+  const s = document.getElementById("factorySaved"); s.style.display="inline"; setTimeout(()=>s.style.display="none", 2000);
+  await load();  // recarga métricas y tablas ya con las fábricas aplicadas
+  showView("fabricas");
+});
 document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.addEventListener("click",()=>showView(n.dataset.view)));
 document.getElementById("menuBtn").addEventListener("click",()=>document.getElementById("sidebar").classList.toggle("open"));
 

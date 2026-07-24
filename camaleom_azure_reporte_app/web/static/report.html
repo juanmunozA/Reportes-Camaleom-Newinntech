@@ -297,46 +297,76 @@ function renderMap() {
   <div id="mapCanvas"></div>`;
   drawMap();
 }
+function openSprintModal(sp) { const cruce=(DATA.tables&&DATA.tables.cruce)||[]; const rows=cruce.filter(t=>(t.Sprint||"")===sp); openRowsModal(sp, rows); }
 function drawMap() {
   const canvas = document.getElementById("mapCanvas"); if (!canvas) return;
   const cruce = (DATA.tables && DATA.tables.cruce) || [];
   const cruceF = mapState.sprint ? cruce.filter(t=>t.Sprint===mapState.sprint) : cruce;
-  const repByHu={}, tasksByHu={}, meta={};
+  const repByHu={}, tasksByHu={}, meta={}, huSp={};
   cruceF.forEach(t => { const id=(String(t.HU||"").match(/^\s*(\d+)/)||[])[1]; if(!id) return;
     repByHu[id]=(repByHu[id]||0)+(parseFloat(t["Horas Camaleom"])||0);
     (tasksByHu[id]=tasksByHu[id]||[]).push(t);
     if(!meta[id]) meta[id]={id, hu:t.HU||("HU "+id), est:0};
-    meta[id].est += (parseFloat(t["Original Estimate Azure"])||0); });
-  const ids = Object.keys(meta).sort((a,b)=>meta[b].est-meta[a].est);
+    meta[id].est += (parseFloat(t["Original Estimate Azure"])||0);
+    huSp[id] = t.Sprint || "Sin sprint"; });
+  const ids = Object.keys(meta);
   if (!ids.length) { canvas.innerHTML='<div class="empty">Sin HUs para este filtro.</div>'; return; }
-  const n = ids.length;
-  const W=1000, H=Math.max(560, 140+n*44), cx=W/2, cy=H/2, R1=Math.min(cx,cy)-150;
+  // Agrupar HUs por sprint (nivel 2)
+  const bySprint = {};
+  ids.forEach(id => { (bySprint[huSp[id]] = bySprint[huSp[id]]||[]).push(id); });
+  const sprintNames = Object.keys(bySprint).sort();
+  sprintNames.forEach(sp => bySprint[sp].sort((a,b)=>meta[b].est-meta[a].est));
+  const totalHus = ids.length;
   const maxEst = Math.max(1, ...ids.map(id=>meta[id].est));
+  const spEstOf = sp => bySprint[sp].reduce((a,id)=>a+meta[id].est,0);
+  const maxSpEst = Math.max(1, ...sprintNames.map(spEstOf));
+
+  const W=1060, H=860, cx=W/2, cy=H/2;
+  const R_hu = Math.min(cx,cy)-160, R_sp = R_hu*0.42;
   const q = mapState.query.trim();
-  let edges="", tasks="", nodes="";
-  ids.forEach((id,i) => {
-    const ang=-Math.PI/2+2*Math.PI*i/n, x=cx+R1*Math.cos(ang), y=cy+R1*Math.sin(ang);
-    const est=meta[id].est, rep=repByHu[id]||0, cov=est>0?rep/est:(rep>0?1:0);
-    const color=cov>=0.999?"#34d399":cov>0?"#fbbf24":"#fb7185";
-    const r=13+16*Math.sqrt(est/maxEst), covPct=est>0?Math.round(100*rep/est):0;
-    const dim = q && id.indexOf(q)<0;
-    edges += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${color}" stroke-width="${(1.4+3*Math.sqrt(est/maxEst)).toFixed(1)}" stroke-opacity="${dim?.05:.32}" class="nx-edge synapse" data-hu="${id}"/>`;
-    if (mapState.showTasks) { const ts=tasksByHu[id]||[], m=ts.length;
-      ts.forEach((t,j) => { const a=ang+(-0.6+(m>1?j/(m-1):0.5)*1.2), rr=r+32, tx=x+rr*Math.cos(a), ty=y+rr*Math.sin(a);
-        const done=["Reportada","Excedida"].includes(String(t["Estado reporte"]));
-        tasks += `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${color}" stroke-width="1" stroke-opacity="${dim?.04:.22}" class="nx-edge" data-hu="${id}"/>`;
-        tasks += `<circle cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="4.6" fill="${done?"#34d399":"#fb7185"}" fill-opacity="${dim?.25:1}" class="neuron-sm" data-hu="${id}" data-tip="${escA("Task "+(t.AzureID||"")+" · "+(t["Horas Camaleom"]||0)+"h · "+(t["Estado reporte"]||""))}" onclick="openTaskModal('${escA(String(t.AzureID||""))}')" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
-      });
-    }
-    nodes += `<g class="nx-hu" data-hu="${id}" style="cursor:pointer;opacity:${dim?.3:1}" onmouseenter="hlHu('${id}',true)" onmouseleave="hlHu('${id}',false)" onclick="openHuModal('${id}')">
-      <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" fill-opacity=".9" filter="url(#nglow)" class="neuron" data-tip="${escA(meta[id].hu+" · est "+est+"h · rep "+rep.toFixed(1)+"h · "+covPct+"%")}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>
-      <text x="${x.toFixed(1)}" y="${(y+r+13).toFixed(1)}" text-anchor="middle" class="neuron-lbl">${escA(id)}</text>
+  let edges="", spNodes="", tasks="", nodes="";
+  let acc = -Math.PI/2;
+  sprintNames.forEach(sp => {
+    const hus = bySprint[sp], cnt = hus.length;
+    const sector = 2*Math.PI * cnt / totalHus;
+    const spAng = acc + sector/2;
+    const spX = cx + R_sp*Math.cos(spAng), spY = cy + R_sp*Math.sin(spAng);
+    const spEst = spEstOf(sp), spR = 13 + 10*Math.sqrt(spEst/maxSpEst);
+    // núcleo -> sprint
+    edges += `<line x1="${cx}" y1="${cy}" x2="${spX.toFixed(1)}" y2="${spY.toFixed(1)}" stroke="#8b5cf6" stroke-width="${(2+3*Math.sqrt(spEst/maxSpEst)).toFixed(1)}" stroke-opacity=".4" class="nx-edge synapse" data-sp="${escA(sp)}"/>`;
+    hus.forEach((id,j) => {
+      const huAng = acc + sector*((j+0.5)/cnt);
+      const hx = cx + R_hu*Math.cos(huAng), hy = cy + R_hu*Math.sin(huAng);
+      const est=meta[id].est, rep=repByHu[id]||0, cov=est>0?rep/est:(rep>0?1:0);
+      const color=cov>=0.999?"#34d399":cov>0?"#fbbf24":"#fb7185";
+      const r=12+15*Math.sqrt(est/maxEst), covPct=est>0?Math.round(100*rep/est):0;
+      const dim = q && id.indexOf(q)<0;
+      // sprint -> HU
+      edges += `<line x1="${spX.toFixed(1)}" y1="${spY.toFixed(1)}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}" stroke="${color}" stroke-width="${(1.3+2.4*Math.sqrt(est/maxEst)).toFixed(1)}" stroke-opacity="${dim?.05:.3}" class="nx-edge synapse" data-hu="${id}" data-sp="${escA(sp)}"/>`;
+      if (mapState.showTasks) { const ts=tasksByHu[id]||[], m=ts.length;
+        ts.forEach((t,k) => { const a=huAng+(-0.5+(m>1?k/(m-1):0.5))*0.95, rr=r+30, tx=hx+rr*Math.cos(a), ty=hy+rr*Math.sin(a);
+          const done=["Reportada","Excedida"].includes(String(t["Estado reporte"]));
+          tasks += `<line x1="${hx.toFixed(1)}" y1="${hy.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${color}" stroke-width="1" stroke-opacity="${dim?.04:.22}" class="nx-edge" data-hu="${id}" data-sp="${escA(sp)}"/>`;
+          tasks += `<circle cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="4.6" fill="${done?"#34d399":"#fb7185"}" fill-opacity="${dim?.25:1}" class="neuron-sm" data-hu="${id}" data-tip="${escA("Task "+(t.AzureID||"")+" · "+(t["Horas Camaleom"]||0)+"h · "+(t["Estado reporte"]||""))}" onclick="openTaskModal('${escA(String(t.AzureID||""))}')" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
+        });
+      }
+      nodes += `<g class="nx-hu" data-hu="${id}" style="cursor:pointer;opacity:${dim?.3:1}" onmouseenter="hlHu('${id}',true)" onmouseleave="hlHu('${id}',false)" onclick="openHuModal('${id}')">
+        <circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="${r.toFixed(1)}" fill="${color}" fill-opacity=".9" filter="url(#nglow)" class="neuron" data-tip="${escA(meta[id].hu+" · est "+est+"h · rep "+rep.toFixed(1)+"h · "+covPct+"%")}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>
+        <text x="${hx.toFixed(1)}" y="${(hy+r+13).toFixed(1)}" text-anchor="middle" class="neuron-lbl">${escA(id)}</text>
+      </g>`;
+      acc; // noop
+    });
+    // nodo Sprint (nivel 2)
+    spNodes += `<g class="nx-sp" data-sp="${escA(sp)}" style="cursor:pointer" onmouseenter="hlSprint('${escA(sp)}',true)" onmouseleave="hlSprint('${escA(sp)}',false)" onclick="openSprintModal('${escA(sp)}')">
+      <circle cx="${spX.toFixed(1)}" cy="${spY.toFixed(1)}" r="${spR.toFixed(1)}" fill="#8b5cf6" fill-opacity=".92" filter="url(#nglow)" class="neuron" data-tip="${escA(sp+" · "+cnt+" HU · "+spEst+"h estimadas")}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>
+      <text x="${spX.toFixed(1)}" y="${(spY+spR+13).toFixed(1)}" text-anchor="middle" class="neuron-lbl">${escA(sp.replace(/^Sprint\s*/,"S"))}</text>
     </g>`;
+    acc += sector;
   });
   canvas.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="neural-svg" preserveAspectRatio="xMidYMid meet"><defs>
     <radialGradient id="coreG2"><stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#8b5cf6"/></radialGradient>
     <filter id="nglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
-    <g>${edges}</g>${tasks}${nodes}
+    <g>${edges}</g>${tasks}${nodes}${spNodes}
     <circle cx="${cx}" cy="${cy}" r="30" fill="url(#coreG2)" filter="url(#nglow)" class="core"/>
     <text x="${cx}" y="${(cy+4)}" text-anchor="middle" class="core-lbl">${escA((DATA.meta&&DATA.meta.persona)||"Tú")}</text></svg>`;
 }
@@ -345,6 +375,12 @@ function hlHu(id, on) {
   c.querySelectorAll(".nx-edge").forEach(e => { e.style.strokeOpacity = on ? (e.dataset.hu===id?0.9:0.04) : ""; });
   c.querySelectorAll(".nx-hu").forEach(g => { if (g.dataset.hu!==id) g.style.opacity = on?0.22:""; });
   c.querySelectorAll(".neuron-sm").forEach(s => { if (s.dataset.hu!==id) s.style.fillOpacity = on?0.15:""; });
+}
+function hlSprint(sp, on) {
+  const c = document.getElementById("mapCanvas"); if (!c) return;
+  c.querySelectorAll(".nx-edge").forEach(e => { e.style.strokeOpacity = on ? (e.dataset.sp===sp?0.85:0.04) : ""; });
+  c.querySelectorAll(".nx-hu").forEach(g => { g.style.opacity = on ? "" : ""; });
+  c.querySelectorAll(".nx-sp").forEach(g => { if (g.dataset.sp!==sp) g.style.opacity = on?0.3:""; });
 }
 
 function showView(v) {

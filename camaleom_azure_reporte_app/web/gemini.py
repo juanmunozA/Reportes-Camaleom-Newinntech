@@ -89,7 +89,7 @@ def preguntar(data: dict[str, Any], pregunta: str, historial: list[dict] | None 
     resp = requests.post(
         _ENDPOINT.format(model=MODEL),
         params={"key": GEMINI_API_KEY},
-        json={"contents": contents, "generationConfig": {"temperature": 0.5, "maxOutputTokens": 5048, "topP": 0.95}},
+        json={"contents": contents, "generationConfig": {"temperature": 0.5, "maxOutputTokens": 10000, "topP": 0.95}},
         timeout=60,
     )
     if resp.status_code >= 400:

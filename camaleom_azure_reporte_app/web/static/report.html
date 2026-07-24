@@ -21,6 +21,8 @@
     <div class="nav-item" data-view="sinreportar" title="Tasks sin reportar"><span class="ic" data-ic="alert"></span> <span class="lbl">Tasks sin reportar</span></div>
     <div class="nav-item" data-view="camaleom" title="Camaleom sin coincidencia"><span class="ic" data-ic="search"></span> <span class="lbl">Camaleom sin coincidencia</span></div>
     <div class="nav-item" data-view="revision" title="Revisión manual"><span class="ic" data-ic="eye"></span> <span class="lbl">Revisión manual</span></div>
+    <div class="nav-sep"></div>
+    <div class="nav-item" data-view="chat" title="Asistente IA"><span class="ic" data-ic="chat"></span> <span class="lbl">Asistente IA</span></div>
     <div class="nav-spacer"></div>
     <div class="nav-item" id="dlExcel" title="Descargar Excel"><span class="ic" data-ic="download"></span> <span class="lbl">Descargar Excel</span></div>
   </aside>
@@ -56,15 +58,16 @@
     <section class="view" id="view-sinreportar"><div id="tbl-sinreportar"></div></section>
     <section class="view" id="view-camaleom"><div id="tbl-camaleom"></div></section>
     <section class="view" id="view-revision"><div id="tbl-revision"></div></section>
-  </main>
-</div>
 
-<button class="chat-fab" id="chatFab" title="Asistente IA"><span data-ic="chat"></span></button>
-<div class="chat-panel" id="chatPanel">
-  <div class="chat-head"><span class="ai-dot"></span><div><strong>Asistente IA</strong><small>Pregúntame sobre tus tasks y horas</small></div><button class="close" id="chatClose">✕</button></div>
-  <div class="chat-body" id="chatBody"></div>
-  <div class="chat-suggest" id="chatSuggest"></div>
-  <div class="chat-input"><input id="chatInput" placeholder="¿Qué me falta por reportar?"><button id="chatSend" data-ic="chat"></button></div>
+    <section class="view" id="view-chat">
+      <div class="chat-full">
+        <div class="chat-full-head"><span class="ai-dot"></span><div><strong>Asistente IA</strong><small>Pregúntame sobre tus tasks, horas, sprints o pídeme una plantilla de Camaleom</small></div></div>
+        <div class="chat-body" id="chatBody"></div>
+        <div class="chat-suggest" id="chatSuggest"></div>
+        <div class="chat-input"><input id="chatInput" placeholder="Escribe tu pregunta…"><button id="chatSend" data-ic="chat"></button></div>
+      </div>
+    </section>
+  </main>
 </div>
 
 <script src="/static/icons.js"></script>
@@ -176,9 +179,10 @@ function showView(v) {
   document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.classList.toggle("active", n.dataset.view===v));
   document.querySelectorAll(".view").forEach(s=>s.classList.remove("active"));
   document.getElementById("view-"+v).classList.add("active");
-  const titles = {resumen:"Resumen",horas:"Horas por día",azure:"Items de Azure",grafico:"Gráfico",reportadas:"Tasks reportadas",sinreportar:"Tasks sin reportar",camaleom:"Camaleom sin coincidencia",revision:"Revisión manual"};
+  const titles = {resumen:"Resumen",horas:"Horas por día",azure:"Items de Azure",grafico:"Gráfico",reportadas:"Tasks reportadas",sinreportar:"Tasks sin reportar",camaleom:"Camaleom sin coincidencia",revision:"Revisión manual",chat:"Asistente IA"};
   document.getElementById("pageTitle").textContent = titles[v] || "Reporte";
   document.getElementById("sidebar").classList.remove("open");
+  if (v === "chat" && !chatHistory.length) { botMsg("Hola, soy tu asistente. Pregúntame sobre tus tasks, horas reportadas, las fechas de tus sprints, o pídeme una plantilla lista para Camaleom."); document.getElementById("chatInput").focus(); }
 }
 document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.addEventListener("click",()=>showView(n.dataset.view)));
 document.getElementById("menuBtn").addEventListener("click",()=>document.getElementById("sidebar").classList.toggle("open"));
@@ -190,12 +194,10 @@ document.getElementById("collapseBtn").addEventListener("click", () => {
   localStorage.setItem("sidebarCollapsed", layout.classList.contains("collapsed") ? "1" : "0");
 });
 
-/* Chatbot */
+/* Chatbot (vista grande) */
 const chatHistory = [];
-const SUGGEST = ["¿Qué me falta por reportar?","¿Cuántas horas llevo vs esperado?","¿Qué tasks están completas?","Resume mi sprint"];
+const SUGGEST = ["¿Qué me falta por reportar?","¿Cuántas horas llevo vs esperado?","¿Qué fechas tiene cada sprint?","Dame una plantilla para Camaleom","Resume mi estado y dame recomendaciones"];
 document.getElementById("chatSuggest").innerHTML = SUGGEST.map(s=>`<button onclick="ask('${s.replace(/'/g,"\\'")}')">${s}</button>`).join("");
-document.getElementById("chatFab").addEventListener("click",()=>{const p=document.getElementById("chatPanel");p.classList.toggle("show");if(p.classList.contains("show")&&!chatHistory.length)botMsg("Hola, soy tu asistente. Pregúntame sobre tus tasks, horas reportadas o lo que te falta por reportar.");});
-document.getElementById("chatClose").addEventListener("click",()=>document.getElementById("chatPanel").classList.remove("show"));
 document.getElementById("chatSend").addEventListener("click",()=>ask(document.getElementById("chatInput").value));
 document.getElementById("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter")ask(document.getElementById("chatInput").value);});
 

@@ -9,19 +9,20 @@
 <body>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="logo"><span class="sq" data-ic="logo"></span> Reporte</div>
-    <div class="nav-item" onclick="location.href='/'"><span class="ic" data-ic="back"></span> Volver a la app</div>
+    <button class="collapse-btn" id="collapseBtn" title="Contraer" data-ic="collapse"></button>
+    <div class="logo"><span class="sq" data-ic="logo"></span> <span>Reporte</span></div>
+    <div class="nav-item" onclick="location.href='/'" title="Volver"><span class="ic" data-ic="back"></span> <span class="lbl">Volver a la app</span></div>
     <div class="nav-sep"></div>
-    <div class="nav-item active" data-view="resumen"><span class="ic" data-ic="grid"></span> Resumen</div>
-    <div class="nav-item" data-view="horas"><span class="ic" data-ic="clock"></span> Horas por día</div>
-    <div class="nav-item" data-view="azure"><span class="ic" data-ic="box"></span> Items de Azure</div>
-    <div class="nav-item" data-view="grafico"><span class="ic" data-ic="chart"></span> Gráfico</div>
-    <div class="nav-item" data-view="reportadas"><span class="ic" data-ic="check"></span> Tasks reportadas</div>
-    <div class="nav-item" data-view="sinreportar"><span class="ic" data-ic="alert"></span> Tasks sin reportar</div>
-    <div class="nav-item" data-view="camaleom"><span class="ic" data-ic="search"></span> Camaleom sin coincidencia</div>
-    <div class="nav-item" data-view="revision"><span class="ic" data-ic="eye"></span> Revisión manual</div>
+    <div class="nav-item active" data-view="resumen" title="Resumen"><span class="ic" data-ic="grid"></span> <span class="lbl">Resumen</span></div>
+    <div class="nav-item" data-view="horas" title="Horas por día"><span class="ic" data-ic="clock"></span> <span class="lbl">Horas por día</span></div>
+    <div class="nav-item" data-view="azure" title="Items de Azure"><span class="ic" data-ic="box"></span> <span class="lbl">Items de Azure</span></div>
+    <div class="nav-item" data-view="grafico" title="Gráfico"><span class="ic" data-ic="chart"></span> <span class="lbl">Gráfico</span></div>
+    <div class="nav-item" data-view="reportadas" title="Tasks reportadas"><span class="ic" data-ic="check"></span> <span class="lbl">Tasks reportadas</span></div>
+    <div class="nav-item" data-view="sinreportar" title="Tasks sin reportar"><span class="ic" data-ic="alert"></span> <span class="lbl">Tasks sin reportar</span></div>
+    <div class="nav-item" data-view="camaleom" title="Camaleom sin coincidencia"><span class="ic" data-ic="search"></span> <span class="lbl">Camaleom sin coincidencia</span></div>
+    <div class="nav-item" data-view="revision" title="Revisión manual"><span class="ic" data-ic="eye"></span> <span class="lbl">Revisión manual</span></div>
     <div class="nav-spacer"></div>
-    <div class="nav-item" id="dlExcel"><span class="ic" data-ic="download"></span> Descargar Excel</div>
+    <div class="nav-item" id="dlExcel" title="Descargar Excel"><span class="ic" data-ic="download"></span> <span class="lbl">Descargar Excel</span></div>
   </aside>
 
   <main class="content">
@@ -137,12 +138,14 @@ function tableHTML(rows) {
   const cols = Object.keys(rows[0]);
   const head = cols.map(c=>`<th>${c}</th>`).join("");
   const body = rows.map(row => "<tr>" + cols.map(c => {
-    let v = row[c]; const num = /^-?\d+(\.\d+)?$/.test(String(v));
+    const raw = String(row[c] ?? ""); const num = /^-?\d+(\.\d+)?$/.test(raw);
+    let inner = raw.replace(/</g,"&lt;");
     if (c === "Estado reporte") {
-      const cl = v==="Reportada"?"ok":(v==="Falta reportar"?"bad":(v==="Solo Camaleom"?"warn":"muted"));
-      v = `<span class="pill ${cl}">${v}</span>`;
+      const cl = raw==="Reportada"?"ok":(raw==="Falta reportar"?"bad":(raw==="Solo Camaleom"?"warn":"muted"));
+      inner = `<span class="pill ${cl}">${raw}</span>`;
     }
-    return `<td class="${num?'num':''}">${v}</td>`;
+    const title = raw.replace(/"/g,"&quot;");
+    return `<td class="${num?'num':''}"><div class="cell" title="${title}">${inner}</div></td>`;
   }).join("") + "</tr>").join("");
   return `<input class="search" placeholder="Buscar en esta tabla…" oninput="filterTable(this)"><div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
@@ -179,6 +182,13 @@ function showView(v) {
 }
 document.querySelectorAll(".nav-item[data-view]").forEach(n=>n.addEventListener("click",()=>showView(n.dataset.view)));
 document.getElementById("menuBtn").addEventListener("click",()=>document.getElementById("sidebar").classList.toggle("open"));
+
+const layout = document.querySelector(".layout");
+if (localStorage.getItem("sidebarCollapsed") === "1") layout.classList.add("collapsed");
+document.getElementById("collapseBtn").addEventListener("click", () => {
+  layout.classList.toggle("collapsed");
+  localStorage.setItem("sidebarCollapsed", layout.classList.contains("collapsed") ? "1" : "0");
+});
 
 /* Chatbot */
 const chatHistory = [];

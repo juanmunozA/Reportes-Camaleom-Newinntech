@@ -115,6 +115,15 @@ def leer_reporte_camaleom(ruta: Path, fecha_inicio: date, fecha_fin: date) -> tu
     }
     return df, meta
 
+def festivos_colombia(anio_inicio: int, anio_fin: int) -> set:
+    """Festivos oficiales de Colombia (Ley Emiliani + Semana Santa) para excluir del calculo."""
+    try:
+        import holidays
+        return set(holidays.country_holidays("CO", years=range(anio_inicio, anio_fin + 1)).keys())
+    except Exception:
+        return set()
+
+
 def construir_resumen_camaleom(df: pd.DataFrame, meta: dict[str, str | None], fecha_inicio: date, fecha_fin: date, horas_dia: float, incluir_fines_semana: bool):
     col_fecha = meta["col_fecha"]
 
@@ -125,9 +134,11 @@ def construir_resumen_camaleom(df: pd.DataFrame, meta: dict[str, str | None], fe
         .rename(columns={col_fecha: "FechaRealPruebasUnitarias", "HorasNum": "Horas reportadas"})
     )
 
-    fechas = pd.date_range(fecha_inicio, fecha_fin).date
+    festivos = festivos_colombia(fecha_inicio.year, fecha_fin.year)
+    fechas = list(pd.date_range(fecha_inicio, fecha_fin).date)
     if not incluir_fines_semana:
         fechas = [f for f in fechas if f.weekday() < 5]
+    fechas = [f for f in fechas if f not in festivos]  # excluye festivos de Colombia
     fechas_periodo = pd.DataFrame({"FechaRealPruebasUnitarias": fechas})
 
     resumen_dia = fechas_periodo.merge(resumen_dia, how="left", on="FechaRealPruebasUnitarias")

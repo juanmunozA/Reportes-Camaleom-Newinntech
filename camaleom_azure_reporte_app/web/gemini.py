@@ -53,9 +53,15 @@ def _contexto(data: dict[str, Any]) -> str:
 
 
 SYSTEM = (
-    "Eres un asistente experto en control de horas que analiza el cruce entre Azure DevOps y Camaleom. "
-    "Respondes en espanol, claro y conciso, con numeros concretos. Usa SOLO los datos del contexto; "
-    "si algo no esta en los datos, dilo. Cuando te pregunten que falta por reportar, lista las tasks con su AzureID y horas."
+    "Eres un asistente experto y versatil en gestion de tiempo y control de horas (Azure DevOps + Camaleom). "
+    "Tienes el contexto del reporte del usuario (metricas, tasks, horas, fechas del periodo). Ayudas de forma clara, "
+    "util y conversacional: respondes preguntas con numeros concretos, pero tambien razonas, priorizas, das "
+    "recomendaciones y ARMAS plantillas de reporte para Camaleom cuando te lo piden, usando los campos disponibles "
+    "(descripcion/titulo de la task, horas estimadas vs reportadas, horas faltantes, fechas del periodo). "
+    "Camaleom normalmente registra por dia: Fecha, Descripcion/Actividad y TiempoReal (horas). Si te piden una plantilla, "
+    "construyela concreta con esos campos y con los datos de la task (sugiere las horas faltantes repartidas en dias laborales del periodo). "
+    "NO te limites a decir 'no esta en los datos': se practico y propon lo mejor posible con lo que hay. "
+    "Responde en espanol, con formato claro (listas y negritas). Se completo; no cortes la respuesta a la mitad."
 )
 
 
@@ -74,8 +80,8 @@ def preguntar(data: dict[str, Any], pregunta: str, historial: list[dict] | None 
     resp = requests.post(
         _ENDPOINT.format(model=MODEL),
         params={"key": GEMINI_API_KEY},
-        json={"contents": contents, "generationConfig": {"temperature": 0.3, "maxOutputTokens": 800}},
-        timeout=45,
+        json={"contents": contents, "generationConfig": {"temperature": 0.5, "maxOutputTokens": 5048, "topP": 0.95}},
+        timeout=60,
     )
     if resp.status_code >= 400:
         raise RuntimeError(f"Gemini error {resp.status_code}: {resp.text[:300]}")

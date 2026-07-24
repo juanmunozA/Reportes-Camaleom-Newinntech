@@ -9,14 +9,15 @@
 <body>
 <div class="layout">
   <aside class="sidebar" id="sidebar">
-    <div class="logo"><span class="sq" data-ic="logo"></span> Reporte de Horas</div>
-    <div class="nav-item active" data-view="inicio"><span class="ic" data-ic="home"></span> Inicio</div>
-    <div class="nav-item" data-view="nueva"><span class="ic" data-ic="plus"></span> Nueva ejecución</div>
-    <div class="nav-item" data-view="ejecuciones"><span class="ic" data-ic="list"></span> Mis ejecuciones</div>
-    <div class="nav-item" data-view="perfil"><span class="ic" data-ic="user"></span> Credenciales</div>
+    <button class="collapse-btn" id="collapseBtn" title="Contraer" data-ic="collapse"></button>
+    <div class="logo"><span class="sq" data-ic="logo"></span> <span>Reporte de Horas</span></div>
+    <div class="nav-item active" data-view="inicio" title="Inicio"><span class="ic" data-ic="home"></span> <span class="lbl">Inicio</span></div>
+    <div class="nav-item" data-view="nueva" title="Nueva ejecución"><span class="ic" data-ic="plus"></span> <span class="lbl">Nueva ejecución</span></div>
+    <div class="nav-item" data-view="ejecuciones" title="Mis ejecuciones"><span class="ic" data-ic="list"></span> <span class="lbl">Mis ejecuciones</span></div>
+    <div class="nav-item" data-view="perfil" title="Credenciales"><span class="ic" data-ic="user"></span> <span class="lbl">Credenciales</span></div>
     <div class="nav-spacer"></div>
     <div class="nav-sep"></div>
-    <div class="nav-item" id="logoutBtn"><span class="ic" data-ic="logout"></span> Cerrar sesión</div>
+    <div class="nav-item" id="logoutBtn" title="Cerrar sesión"><span class="ic" data-ic="logout"></span> <span class="lbl">Cerrar sesión</span></div>
   </aside>
 
   <main class="content">
@@ -156,6 +157,13 @@ document.querySelectorAll(".nav-item[data-view]").forEach(n => n.addEventListene
 document.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", () => nav(b.dataset.goto)));
 document.getElementById("menuBtn").addEventListener("click", () => document.getElementById("sidebar").classList.toggle("open"));
 document.getElementById("logoutBtn").addEventListener("click", async () => { await fetch("/api/logout", {method:"POST"}); location.replace("/"); });
+
+const layout = document.querySelector(".layout");
+if (localStorage.getItem("sidebarCollapsed") === "1") layout.classList.add("collapsed");
+document.getElementById("collapseBtn").addEventListener("click", () => {
+  layout.classList.toggle("collapsed");
+  localStorage.setItem("sidebarCollapsed", layout.classList.contains("collapsed") ? "1" : "0");
+});
 
 document.querySelectorAll(".radio-chip").forEach(c => c.addEventListener("click", () => {
   document.querySelectorAll(".radio-chip").forEach(x => x.classList.remove("active"));

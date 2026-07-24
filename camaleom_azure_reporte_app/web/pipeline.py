@@ -242,30 +242,36 @@ def ejecutar(
     if not sprints:
         raise RuntimeError("No encontre un sprint para esa fecha final. Indica el/los sprint(s) manualmente.")
 
-    # El periodo va desde el INICIO del sprint hasta la fecha final elegida.
-    starts = []
+    # El periodo va del INICIO del sprint hasta el fin real del sprint, recortado por la fecha final.
+    starts, finishes = [], []
     for s in sprints:
         try:
-            ini, _fin = sprint_bounds(cliente, s)
+            ini, fin = sprint_bounds(cliente, s)
             if ini:
                 starts.append(ini)
-                log(f"Sprint {s} inicia el {ini}.")
+            if fin:
+                finishes.append(fin)
+            log(f"Sprint {s}: {ini} -> {fin}")
         except Exception as exc:
             log(f"No pude leer fechas del sprint {s}: {exc}")
     fecha_inicio = min(starts) if starts else fecha_final
-    log(f"Periodo del analisis: {fecha_inicio} -> {fecha_final}")
+    fin_sprint = max(finishes) if finishes else fecha_final
+    fecha_fin = min(fin_sprint, fecha_final)  # fin efectivo = min(fin real del sprint, fecha limite)
+    if fecha_fin < fecha_inicio:
+        fecha_fin = fecha_inicio
+    log(f"Periodo del analisis: {fecha_inicio} -> {fecha_fin} (fin real sprint {fin_sprint}, limite {fecha_final})")
 
     # Camaleom: por archivo subido o intento automatico por navegador
     if source == "camaleom":
-        excel_path = descargar_camaleom_subproceso(camaleom_user, camaleom_pass, fecha_inicio, fecha_final, log=log)
+        excel_path = descargar_camaleom_subproceso(camaleom_user, camaleom_pass, fecha_inicio, fecha_fin, log=log)
         log("Excel de Camaleom descargado automaticamente.")
     if not excel_path:
         raise RuntimeError("No hay Excel de Camaleom (sube el archivo o usa el modo automatico).")
 
     log("Leyendo y filtrando el Excel de Camaleom...")
-    datos_camaleom, meta = leer_reporte_camaleom(Path(excel_path), fecha_inicio, fecha_final)
+    datos_camaleom, meta = leer_reporte_camaleom(Path(excel_path), fecha_inicio, fecha_fin)
     resumen_dia, detalle, total_por_descripcion = construir_resumen_camaleom(
-        datos_camaleom, meta, fecha_inicio, fecha_final, HORAS_DIA, incluir_fines_semana=False
+        datos_camaleom, meta, fecha_inicio, fecha_fin, HORAS_DIA, incluir_fines_semana=False
     )
 
     # Azure
@@ -312,7 +318,7 @@ def ejecutar(
     return {
         "meta": {
             "periodo_inicio": fecha_inicio.isoformat(),
-            "periodo_fin": fecha_final.isoformat(),
+            "periodo_fin": fecha_fin.isoformat(),
             "sprints": sprints,
             "persona": diff or "Todos",
         },

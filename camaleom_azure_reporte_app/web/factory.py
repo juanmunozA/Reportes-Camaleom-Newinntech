@@ -99,6 +99,42 @@ def apply(data: dict[str, Any], factory_ids: list[str] | None) -> dict[str, Any]
     if tasks_no_fab:
         m["cobertura_horas"] = round(100.0 * completas / tasks_no_fab, 1)
 
+    # --- Descontar las horas de fabrica de "Horas por dia", grafico y total reportado ---
+    registros = data.get("registros_hu", []) or []
+    por_dia: dict[str, float] = {}
+    total_fab = 0.0
+    if registros:
+        for r in registros:
+            if hu_id(r.get("hu", "")) in fset:
+                f = str(r.get("fecha", ""))
+                h = _num(r.get("horas"))
+                por_dia[f] = por_dia.get(f, 0.0) + h
+                total_fab += h
+    else:
+        # Reporte viejo sin detalle por dia: al menos descontamos del total global.
+        for t in cruce:
+            if t.get("Fábrica") == "Sí":
+                total_fab += _num(t.get("Horas Camaleom"))
+
+    for row in tables.get("horas_dia", []) or []:
+        q = por_dia.get(str(row.get("FechaRealPruebasUnitarias", "")), 0.0)
+        if q:
+            rep = max(_num(row.get("Horas reportadas")) - q, 0.0)
+            debe = _num(row.get("Debe tener"))
+            diff = round(rep - debe, 2)
+            row["Horas reportadas"] = round(rep, 2)
+            row["Diferencia"] = diff
+            row["Estado"] = "OK" if abs(diff) < 0.01 else (("Falta %.1f" % abs(diff)) if diff < 0 else ("Sobra %.1f" % diff))
+
+    for g in d.get("grafico", []) or []:
+        q = por_dia.get(str(g.get("fecha", "")), 0.0)
+        if q:
+            g["reportadas"] = round(max(_num(g.get("reportadas")) - q, 0.0), 2)
+
+    if total_fab:
+        m["total_reportado"] = round(_num(m.get("total_reportado")) - total_fab, 1)
+        m["balance"] = round(_num(m.get("total_reportado")) - _num(m.get("total_esperado")), 1)
+
     d["hu_list"] = build_hu_list(data)
     d["factory"] = sorted(fset)
     return d

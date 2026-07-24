@@ -15,6 +15,7 @@ from ..azure_devops import AzureDevOpsClient
 from ..camaleom_excel import construir_resumen_camaleom, leer_reporte_camaleom
 from ..config import AZURE_DEVOPS_PAT, CAMALEOM_URL
 from ..matcher import cruzar_azure_camaleom, es_task_azure
+from ..text_utils import normalizar_texto
 
 HORAS_DIA = 8.0
 
@@ -310,6 +311,21 @@ def ejecutar(
 
     metrics = compute(azure_df, comparativo, resumen_dia, total_por_descripcion)
 
+    # Detalle por dia + HU (para poder descontar las fabricas de "horas por dia" y del total).
+    registros_hu = []
+    if comparativo is not None and not comparativo.empty and detalle is not None and not detalle.empty:
+        desc2hu = {}
+        for _, row in comparativo.iterrows():
+            dk = normalizar_texto(str(row.get("Descripcion Camaleom", "")))
+            hu = row.get("HU", "")
+            if dk and hu:
+                desc2hu[dk] = str(hu)
+        for _, row in detalle.iterrows():
+            dk = normalizar_texto(str(row.get("DescripcionLimpia", "")))
+            hu = desc2hu.get(dk)
+            if hu:
+                registros_hu.append({"hu": hu, "fecha": str(row.get("FechaRealPruebasUnitarias", "")), "horas": round(_num(row.get("Horas")), 2)})
+
     solo_tasks = comparativo[comparativo["Tipo"].apply(es_task_azure)] if not comparativo.empty else comparativo
     tareas_cols = ["AzureID", "Sprint", "HU", "Titulo Azure", "Estado Azure", "Original Estimate Azure",
                    "Completed Work Azure", "Horas Camaleom", "Diferencia Camaleom vs Completed",
@@ -340,6 +356,7 @@ def ejecutar(
             "periodo_inicio": fecha_inicio.isoformat(),
             "periodo_fin": fecha_fin.isoformat(),
             "sprint_ranges": sprint_ranges,
+            "_registros": len(registros_hu),
             "sprints": sprints,
             "persona": diff or "Todos",
         },
@@ -354,5 +371,6 @@ def ejecutar(
             "cruce": _records(solo_tasks, tareas_cols),
         },
         "grafico": grafico,
+        "registros_hu": registros_hu,
         "_xlsx": _build_xlsx(azure_df, comparativo, resumen_dia, total_por_descripcion),
     }

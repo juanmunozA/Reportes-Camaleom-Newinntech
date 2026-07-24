@@ -51,10 +51,14 @@
       <div class="chart-summary" id="chartSummary"></div>
       <div class="section-card">
         <div class="chart-head">
-          <h2>Horas reportadas vs esperadas por día</h2>
-          <div class="chart-legend"><span><i class="sw grad"></i>Reportadas</span><span><i class="sw esp"></i>Esperadas</span><span><i class="dot ok"></i>Día cumplido</span><span><i class="dot bad"></i>Día incompleto</span></div>
+          <h2>Flujo de trabajo · Sprint → HU → Estado</h2>
+          <div class="chart-legend">
+            <span><i class="dot ok"></i>Reportada</span><span><i class="dot" style="background:#22d3ee"></i>Excedida</span>
+            <span><i class="dot warn"></i>Parcial</span><span><i class="dot bad"></i>Falta reportar</span>
+            <span style="color:var(--muted)">Grosor = horas · pasa el mouse</span>
+          </div>
         </div>
-        <div class="barchart" id="barchart"></div>
+        <div id="sankey"></div>
       </div>
     </section>
 
@@ -265,9 +269,7 @@ function hideTip() { if (_tip) _tip.style.display = "none"; }
 
 function renderChart() {
   const g = DATA.grafico || [];
-  const host = document.getElementById("barchart");
   const sum = document.getElementById("chartSummary");
-  if (!g.length) { host.innerHTML = '<div class="empty">Sin datos para graficar.</div>'; sum.innerHTML = ""; return; }
   const totalRep = g.reduce((a,d)=>a+ (+d.reportadas||0), 0);
   const totalEsp = g.reduce((a,d)=>a+ (+d.esperadas||0), 0);
   const diasLab = g.filter(d=>d.esperadas>0).length;
@@ -282,25 +284,81 @@ function renderChart() {
     ["% cumplimiento", pct+"%", pct>=100?"ok":pct>=70?"warn":"bad"],
   ].map(([l,v,c])=>`<div class="cs-item ${c}"><span>${l}</span><b>${v}</b></div>`).join("");
 
-  const top = Math.max(2, Math.ceil(Math.max(8, ...g.map(d=>Math.max(d.reportadas,d.esperadas)))/2)*2);
-  const ticks = []; for (let t=top;t>=0;t-=2) ticks.push(t);
-  const yaxis = ticks.map(t=>`<span>${t}</span>`).join("");
-  const grid = ticks.map(t=>`<div class="gridline" style="bottom:${100*t/top}%"></div>`).join("");
-  const cols = g.map(d => {
-    const hr = 100*(+d.reportadas||0)/top, he = 100*(+d.esperadas||0)/top;
-    const dt = new Date(d.fecha+"T00:00:00"); const wd = DIAS[dt.getDay()]||""; const dd=(d.fecha||"").slice(5);
-    const ok = d.esperadas>0 && d.reportadas>=d.esperadas-0.01;
-    const falta = Math.max(0, (d.esperadas-d.reportadas)).toFixed(1);
-    const tip = `${wd} ${dd}  ·  Reportadas: ${d.reportadas}h  ·  Esperadas: ${d.esperadas}h  ·  ${ok?"Cumplido ✓":"Falta "+falta+"h"}`;
-    return `<div class="day-col" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()">
-      <div class="bar-pair">
-        <div class="bar rep" style="height:${hr}%"><span class="bar-val" style="color:${ok?'var(--text)':'var(--bad)'}">${d.reportadas||""}</span></div>
-        <div class="bar esp" style="height:${he}%"></div>
-      </div>
-      <div class="day-lbl"><b>${wd}</b>${dd}</div>
-    </div>`;
-  }).join("");
-  host.innerHTML = `<div class="y-axis">${yaxis}</div><div class="plot"><div class="gridlines">${grid}</div><div class="bars-row">${cols}</div></div>`;
+  renderSankey();
+}
+
+const EST_COLOR = { "Reportada":"#34d399", "Excedida":"#22d3ee", "Parcial":"#fbbf24", "Falta reportar":"#fb7185", "Solo Camaleom":"#9aa0c3", "Sin estado":"#9aa0c3" };
+function renderSankey() {
+  const host = document.getElementById("sankey");
+  const cruce = (DATA.tables && DATA.tables.cruce) || [];
+  if (!cruce.length) { host.innerHTML = '<div class="empty">Sin datos para el flujo.</div>'; return; }
+  const val = t => Math.max(parseFloat(t["Original Estimate Azure"])||0, parseFloat(t["Horas Camaleom"])||0, 0.4);
+
+  // Agrupar en 3 columnas: Sprint -> HU -> Estado
+  const spV={}, huV={}, esV={}, linkA={}, linkB={};
+  cruce.forEach(t => {
+    const sp = t.Sprint || "Sin sprint";
+    const hid = (String(t.HU||"").match(/^\s*(\d+)/)||[])[1] || "?";
+    const hu = "HU " + hid;
+    const es = t["Estado reporte"] || "Sin estado";
+    const v = val(t);
+    spV[sp]=(spV[sp]||0)+v; huV[hu]=(huV[hu]||0)+v; esV[es]=(esV[es]||0)+v;
+    linkA[sp+"||"+hu]=(linkA[sp+"||"+hu]||0)+v;
+    linkB[hu+"||"+es]=(linkB[hu+"||"+es]||0)+v;
+  });
+  const total = Object.values(esV).reduce((a,b)=>a+b,0) || 1;
+
+  const colData = [
+    Object.entries(spV).sort((a,b)=>b[1]-a[1]),
+    Object.entries(huV).sort((a,b)=>b[1]-a[1]),
+    Object.entries(esV).sort((a,b)=>b[1]-a[1]),
+  ];
+  const maxNodes = Math.max(...colData.map(c=>c.length));
+  const W = 960, pad = 18, gap = 9, nodeW = 13;
+  const H = Math.max(360, maxNodes*34 + pad*2);
+  const scale = (H - pad*2 - gap*(maxNodes-1)) / total;
+  const xs = [pad+46, W/2 - nodeW/2, W - pad - 100];
+
+  // Posicionar nodos
+  const nodes = {}; // key -> {x,y,h,off:{out:0,in:0},label,value,col}
+  colData.forEach((entries, ci) => {
+    let y = pad;
+    entries.forEach(([name, v]) => {
+      const h = Math.max(v*scale, 3);
+      nodes[ci+"::"+name] = { x: xs[ci], y, h, offOut:0, offIn:0, value:v, name, col:ci };
+      y += h + gap;
+    });
+  });
+
+  let links = "";
+  function link(sKey, tKey, v, color) {
+    const s = nodes[sKey], t = nodes[tKey]; if (!s || !t) return;
+    const h = Math.max(v*scale, 1.2);
+    const sy = s.y + s.offOut + h/2; s.offOut += h;
+    const ty = t.y + t.offIn + h/2; t.offIn += h;
+    const x1 = s.x + nodeW, x2 = t.x, mx = (x1+x2)/2;
+    const tip = `${s.name} → ${t.name} · ${v.toFixed(1)}h`;
+    links += `<path d="M${x1.toFixed(1)},${sy.toFixed(1)} C${mx.toFixed(1)},${sy.toFixed(1)} ${mx.toFixed(1)},${ty.toFixed(1)} ${x2.toFixed(1)},${ty.toFixed(1)}" fill="none" stroke="${color}" stroke-width="${h.toFixed(1)}" stroke-opacity=".28" class="flow-link" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
+  }
+  Object.entries(linkA).forEach(([k,v]) => { const [sp,hu]=k.split("||"); link("0::"+sp,"1::"+hu, v, "#8b5cf6"); });
+  Object.entries(linkB).forEach(([k,v]) => { const [hu,es]=k.split("||"); link("1::"+hu,"2::"+es, v, EST_COLOR[es]||"#9aa0c3"); });
+
+  let rects = "";
+  Object.values(nodes).forEach(nd => {
+    const color = nd.col===2 ? (EST_COLOR[nd.name]||"#9aa0c3") : (nd.col===1 ? "#22d3ee" : "#8b5cf6");
+    const tip = `${nd.name} · ${nd.value.toFixed(1)}h`;
+    rects += `<rect x="${nd.x}" y="${nd.y.toFixed(1)}" width="${nodeW}" height="${nd.h.toFixed(1)}" rx="3" fill="${color}" class="flow-node" data-tip="${escA(tip)}" onmousemove="showTip(event,this)" onmouseleave="hideTip()"/>`;
+    const anchor = nd.col===0 ? "end" : "start";
+    const tx = nd.col===0 ? nd.x-6 : nd.x+nodeW+6;
+    const lbl = nd.name.length>22 ? nd.name.slice(0,21)+"…" : nd.name;
+    rects += `<text x="${tx}" y="${(nd.y+nd.h/2+3.5).toFixed(1)}" text-anchor="${anchor}" class="flow-lbl">${escA(lbl)}</text>`;
+  });
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" class="sankey-svg" preserveAspectRatio="xMidYMid meet">
+    <text x="${xs[0]-40}" y="12" class="flow-col-lbl">SPRINT</text>
+    <text x="${W/2}" y="12" text-anchor="middle" class="flow-col-lbl">HU</text>
+    <text x="${W-pad}" y="12" text-anchor="end" class="flow-col-lbl">ESTADO</text>
+    ${links}${rects}</svg>`;
 }
 
 function renderMap() {

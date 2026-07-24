@@ -244,6 +244,7 @@ def ejecutar(
 
     # El periodo va del INICIO del sprint hasta el fin real del sprint, recortado por la fecha final.
     starts, finishes = [], []
+    sprint_ranges = []
     for s in sprints:
         try:
             ini, fin = sprint_bounds(cliente, s)
@@ -251,6 +252,7 @@ def ejecutar(
                 starts.append(ini)
             if fin:
                 finishes.append(fin)
+            sprint_ranges.append({"sprint": s, "inicio": ini.isoformat() if ini else None, "fin": fin.isoformat() if fin else None})
             log(f"Sprint {s}: {ini} -> {fin}")
         except Exception as exc:
             log(f"No pude leer fechas del sprint {s}: {exc}")
@@ -319,6 +321,7 @@ def ejecutar(
         "meta": {
             "periodo_inicio": fecha_inicio.isoformat(),
             "periodo_fin": fecha_fin.isoformat(),
+            "sprint_ranges": sprint_ranges,
             "sprints": sprints,
             "persona": diff or "Todos",
         },

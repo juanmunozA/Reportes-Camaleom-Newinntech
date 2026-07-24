@@ -26,8 +26,14 @@ def _contexto(data: dict[str, Any]) -> str:
             )
         return "\n".join(out) or "(ninguna)"
 
+    rangos = meta.get("sprint_ranges") or []
+    rangos_txt = "\n".join(f"- Sprint {r.get('sprint')}: del {r.get('inicio')} al {r.get('fin')} (fechas reales de Azure DevOps)" for r in rangos) or "(no disponibles en este reporte)"
+
     partes = [
         f"PERIODO: {meta.get('periodo_inicio')} a {meta.get('periodo_fin')}. Persona: {meta.get('persona')}. Sprints: {meta.get('sprints')}.",
+        "",
+        "FECHAS REALES DE CADA SPRINT (tomadas de Azure DevOps; NO inventes otras):",
+        rangos_txt,
         "",
         "METRICAS GLOBALES:",
         f"- Items Azure: {m.get('items_azure')}, HU: {m.get('hu_azure')}, Tasks: {m.get('tasks_azure')}",
@@ -61,6 +67,9 @@ SYSTEM = (
     "Camaleom normalmente registra por dia: Fecha, Descripcion/Actividad y TiempoReal (horas). Si te piden una plantilla, "
     "construyela concreta con esos campos y con los datos de la task (sugiere las horas faltantes repartidas en dias laborales del periodo). "
     "NO te limites a decir 'no esta en los datos': se practico y propon lo mejor posible con lo que hay. "
+    "IMPORTANTE sobre fechas: usa EXCLUSIVAMENTE las fechas reales de cada sprint que aparecen en el contexto; "
+    "NUNCA inventes ni asumas fechas. Los sprints van normalmente de martes a lunes (si el lunes de cierre es festivo en "
+    "Colombia, el ultimo dia habil es el viernes previo). Si te preguntan por las fechas de un sprint, responde con el rango exacto provisto. "
     "Responde en espanol, con formato claro (listas y negritas). Se completo; no cortes la respuesta a la mitad."
 )
 
